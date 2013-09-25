@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<groupId>ch.meemin</groupId>
+	<artifactId>PMTable-root</artifactId>
+	<packaging>pom</packaging>
+	<version>1.0</version>
+	<name>PMTable Add-on Root Project</name>
+
+	<modules>
+		<module>PMTable</module>
+		<module>PMTable-demo</module>
+	</modules>
+
+	<organization>
+		<name>My Name</name>
+		<url>https://github.com/mygithubaccount/PMTable/</url>
+	</organization>
+	<scm>
+		<url>git://github.com/mygithubaccount/PMTable.git</url>
+		<connection>scm:git:git://github.com/mygithubaccount/PMTable.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com:/mygithubaccount/${ComponentClassName}.git</developerConnection>
+		<tag>PMTable add-on for Vaadin</tag>
+	</scm>
+	
+	<issueManagement>
+		<system>GitHub</system>
+		<url>https://github.com/mygithubaccount/PMTable/issues</url>
+	</issueManagement>
+
+</project>
