@@ -3678,11 +3678,6 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 																																								// needs the full path here
 
 		private final LinkedList<Widget> renderedRows = new LinkedList<Widget>();
-		/**
-		 * Due some optimizations row height measuring is deferred and initial set of rows is rendered detached. Flag set on
-		 * when table body has been attached in dom and rowheight has been measured.
-		 */
-		private boolean tBodyMeasurementsDone = false;
 
 		Element container = DOM.createDiv();
 
@@ -3899,22 +3894,18 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		 * @return
 		 */
 		public int getColWidth(int columnIndex) {
-			if (tBodyMeasurementsDone) {
-				if (renderedRows.isEmpty()) {
-					// no rows yet rendered
-					return 0;
-				}
-				for (Widget row : renderedRows) {
-					if (!(row instanceof PMTableWidgetGeneratedRow)) {
-						TableRowElement tr = row.getElement().cast();
-						Element wrapperdiv = tr.getCells().getItem(columnIndex).getFirstChildElement().cast();
-						return wrapperdiv.getOffsetWidth();
-					}
-				}
-				return 0;
-			} else {
+			if (renderedRows.isEmpty()) {
+				// no rows yet rendered
 				return 0;
 			}
+			for (Widget row : renderedRows) {
+				if (!(row instanceof PMTableWidgetGeneratedRow)) {
+					TableRowElement tr = row.getElement().cast();
+					Element wrapperdiv = tr.getCells().getItem(columnIndex).getFirstChildElement().cast();
+					return wrapperdiv.getOffsetWidth();
+				}
+			}
+			return 0;
 		}
 
 		/**
