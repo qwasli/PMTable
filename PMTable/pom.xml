@@ -26,8 +26,6 @@
 		<Vaadin-Addon>${artifactId}-${project.version}.jar</Vaadin-Addon>
 	</properties>
 
-
-
 	<licenses>
 		<license>
 			<name>Apache 2</name>
@@ -127,7 +125,7 @@
 						<index>true</index>
 						<manifest>
 							<addClasspath>false</addClasspath>
-							<addDefaultImplementationEntries>false</addDefaultImplementationEntries>
+							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 						</manifest>
 						<manifestEntries>
 							<!-- Package format version - do not change -->
