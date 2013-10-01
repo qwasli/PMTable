@@ -21,6 +21,17 @@
 		<Vaadin-License-Title>Apache License 2.0</Vaadin-License-Title>
 		<Vaadin-Addon>${artifactId}-${project.version}.jar</Vaadin-Addon>
 	</properties>
+	
+	<organization>
+		<name>a4D Architekten AG</name>
+		<url>http://a4d.ch/</url>
+	</organization>
+	<developers>
+		<developer>
+			<name>Raffael Bachmann</name>
+			<organization>a4D Architekten AG</organization>
+		</developer>
+	</developers>
 
 	<licenses>
 		<license>
@@ -30,6 +41,18 @@
 		</license>
 	</licenses>
 
+	<scm>
+		<url>https://github.com/qwasli/PMTable.git</url>
+		<connection>scm:git:git://github.com/qwasli/PMTable.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com:/qwasli/PMTable.git</developerConnection>
+		<tag>PMTable add-on for Vaadin</tag>
+	</scm>
+
+	<issueManagement>
+		<system>GitHub</system>
+		<url>https://github.com/qwasli/PMTable/issues</url>
+	</issueManagement>
+	
 	<repositories>
 		<repository>
 			<id>vaadin-addons</id>
