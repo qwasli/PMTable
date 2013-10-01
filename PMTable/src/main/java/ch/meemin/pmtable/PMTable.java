@@ -2695,6 +2695,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 
 	@Override
 	public void attach() {
+		fullRefresh(false);
 		super.attach();
 	}
 
