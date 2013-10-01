@@ -3089,13 +3089,13 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	public void setItemChanged(Object itemId) {
 		if (containsId(itemId)) {
 			parseItem(itemId, listenedProperties);
-		}
-		if (fullRefresh)
-			return;
-		if (!this.insertedItemIds.contains(itemId) && !this.removedItemIds.contains(itemId))
-			this.updatedItemIds.add(itemId);
+			if (fullRefresh)
+				return;
+			if (!this.insertedItemIds.contains(itemId) && !this.removedItemIds.contains(itemId))
+				this.updatedItemIds.add(itemId);
 
-		markAsDirty();
+			markAsDirty();
+		}
 	}
 
 	public void setItemInserted(Object itemId) {
