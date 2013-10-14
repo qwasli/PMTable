@@ -4972,7 +4972,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 						startRow = (PMTableWidgetRow) scrollBody.iterator().next();
 						setRowFocus(endRow);
 					}
+				} else if (!startRow.isSelected()) {
+					// The start row is no longer selected (probably removed)
+					// and so we select from above
+					startRow = (PMTableWidgetRow) scrollBody.iterator().next();
+					setRowFocus(endRow);
 				}
+
 				// Deselect previous items if so desired
 				if (deselectPrevious) {
 					deselectAll();
