@@ -33,7 +33,9 @@ import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Button.ClickListener;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Label;
+import com.vaadin.ui.Table;
 import com.vaadin.ui.TextField;
+import com.vaadin.ui.TreeTable;
 import com.vaadin.ui.UI;
 import com.vaadin.ui.VerticalLayout;
 import com.vaadin.ui.themes.Reindeer;
@@ -50,29 +52,61 @@ public class DemoUI extends UI implements Handler, DropHandler {
 	private final static Random rand = new Random();
 	private final PMTreeTable pmTreeTable = new PMTreeTable();
 
+	private class MyTreeTable extends TreeTable {
+
+		public MyTreeTable() {
+			super();
+			alwaysRecalculateColumnWidths = true;
+		}
+	}
+
+	private final MyTreeTable table = new MyTreeTable();
+
 	private Action actionRemove = new ShortcutAction("Remove", null, KeyCode.DELETE, new int[] { ModifierKey.CTRL });
 	private Action actionChange = new ShortcutAction("Change");
 	private Action[] actions = new Action[] { actionRemove, actionChange };
 
 	@Override
 	protected void init(VaadinRequest request) {
-
 		pmTreeTable.addActionHandler(this);
 		pmTreeTable.setDropHandler(this);
 		pmTreeTable.setDragMode(TableDragMode.ROW);
 
+		table.addActionHandler(this);
+		table.setDropHandler(this);
+		table.setDragMode(Table.TableDragMode.ROW);
+
 		pmTreeTable.addContainerProperty(1, String.class, "foo");
 		pmTreeTable.addContainerProperty(2, Label.class, null);
-		for (int i = 0; i < 20; i++) {
+		// pmTreeTable.setColumnExpandRatio(2, 1f);
+		pmTreeTable.setColumnWidth(1, -1);
+		pmTreeTable.setColumnWidth(2, -1);
+
+		table.addContainerProperty(1, String.class, "foo");
+		table.addContainerProperty(2, Label.class, null);
+		// table.setColumnExpandRatio(2, 1f);
+		table.setColumnWidth(1, -1);
+		table.setColumnWidth(2, -1);
+
+		for (int i = 0; i < 10; i++) {
 			Object o = pmTreeTable.addItem();
 			boolean b = rand.nextBoolean();
 			Label l = new Label(b ? "foo<br />bar" : "foobar");
 			if (b)
 				l.setContentMode(ContentMode.HTML);
 			pmTreeTable.getItem(o).getItemProperty(2).setValue(l);
+
+			o = table.addItem();
+			l = new Label(b ? "foo<br />bar" : "foobar");
+			if (b)
+				l.setContentMode(ContentMode.HTML);
+			table.getItem(o).getItemProperty(2).setValue(l);
 		}
-		pmTreeTable.setHeight(400, Unit.PIXELS);
-		pmTreeTable.setWidth(400, Unit.PIXELS);
+		pmTreeTable.setHeight(300, Unit.PIXELS);
+		pmTreeTable.setWidth(100, Unit.PERCENTAGE);
+		// pmTreeTable.setWidth(400, Unit.PIXELS);
+		table.setHeight(300, Unit.PIXELS);
+		table.setWidth(100, Unit.PERCENTAGE);
 
 		final TextField stringField = new TextField();
 		stringField.setInputPrompt("New String field");
@@ -86,13 +120,24 @@ public class DemoUI extends UI implements Handler, DropHandler {
 
 			@Override
 			public void buttonClick(ClickEvent event) {
+				String text = stringField.getValue();
+				String labelText = lableField.getValue();
+
 				Object id = pmTreeTable.addItem();
 				Item item = pmTreeTable.getItem(id);
-				item.getItemProperty(1).setValue(stringField.getValue());
-				item.getItemProperty(2).setValue(new Label(lableField.getValue()));
+				item.getItemProperty(1).setValue(text);
+				item.getItemProperty(2).setValue(new Label(labelText));
+				pmTreeTable.setItemChanged(id);
+
+				id = table.addItem();
+				item = table.getItem(id);
+				item.getItemProperty(1).setValue(text);
+				item.getItemProperty(2).setValue(new Label(labelText));
+
 				stringField.setValue(null);
 				lableField.setValue(null);
-				pmTreeTable.setItemChanged(id);
+				// table.setColumnCollapsed(1, true);
+				// table.setColumnCollapsed(1, false);
 			}
 		});
 		HorizontalLayout addLine = new HorizontalLayout(stringField, lableField, b);
@@ -104,6 +149,7 @@ public class DemoUI extends UI implements Handler, DropHandler {
 		final VerticalLayout layout = new VerticalLayout(title, description, pmTreeTable, addLine);
 		layout.setWidth(100, Unit.PERCENTAGE);
 		layout.addComponent(pmTreeTable);
+		layout.addComponent(table);
 		setContent(layout);
 	}
 
@@ -115,9 +161,15 @@ public class DemoUI extends UI implements Handler, DropHandler {
 	@Override
 	public void handleAction(Action action, Object sender, Object target) {
 		if (actionRemove.equals(action)) {
-			pmTreeTable.removeItem(target);
+			if (sender.equals(pmTreeTable))
+				pmTreeTable.removeItem(target);
+			else
+				table.removeItem(target);
 		} else if (actionChange.equals(action)) {
-			pmTreeTable.getItem(target).getItemProperty(1).setValue(Integer.toString(rand.nextInt(99999)));
+			if (sender.equals(pmTreeTable))
+				pmTreeTable.getItem(target).getItemProperty(1).setValue(Integer.toString(rand.nextInt(99999)));
+			else
+				table.getItem(target).getItemProperty(1).setValue(Integer.toString(rand.nextInt(99999)));
 		}
 	}
 
@@ -125,7 +177,6 @@ public class DemoUI extends UI implements Handler, DropHandler {
 	public void drop(DragAndDropEvent event) {
 		Transferable t = event.getTransferable();
 		AbstractSelectTargetDetails dropData = ((AbstractSelectTargetDetails) event.getTargetDetails());
-
 		Object itemId = ((DataBoundTransferable) t).getItemId();
 		Object targetItemId = dropData.getItemIdOver();
 		VerticalDropLocation location = dropData.getDropLocation();
