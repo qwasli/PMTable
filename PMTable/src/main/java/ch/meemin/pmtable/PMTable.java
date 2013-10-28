@@ -2152,6 +2152,10 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 			target.addAttribute("rowheaders", true);
 		}
 
+		if (alwaysRecalculateColumnWidths) {
+			target.addAttribute("recalcWidths", true);
+		}
+
 		target.addAttribute("colfooters", columnFootersVisible);
 
 	}

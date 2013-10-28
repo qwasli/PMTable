@@ -92,7 +92,6 @@ import com.vaadin.shared.AbstractComponentState;
 import com.vaadin.shared.MouseEventDetails;
 import com.vaadin.shared.ui.dd.VerticalDropLocation;
 
-// Extend any GWT Widget
 public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandler, VHasDropHandler, FocusHandler,
 		BlurHandler, Focusable, ActionOwner {
 
@@ -5186,6 +5185,21 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				scrollBodyPanel.setFocus(true);
 			}
 
+		}
+
+		public void resetCellWidths() {
+			for (Widget row : renderedRows) {
+				if (row instanceof PMTableWidgetRow) {
+					final int cells = tHead.getVisibleCellCount();
+					for (int i = 0; i < cells; i++) {
+						Element rowelem = ((PMTableWidgetRow) row).getElement();
+						Element cell = DOM.getChild(rowelem, i);
+						cell.getStyle().clearWidth();
+						cell.getFirstChildElement().getStyle().clearWidth();
+					}
+				}
+			}
+			sizeNeedsInit = true;
 		}
 
 	}

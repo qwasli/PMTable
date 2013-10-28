@@ -102,6 +102,8 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 
 		getWidget().recalcWidths = uidl.hasAttribute("recalcWidths");
 		if (getWidget().recalcWidths) {
+			if (getWidget().scrollBody != null)
+				getWidget().scrollBody.resetCellWidths();
 			getWidget().tHead.clear();
 			getWidget().tFoot.clear();
 		}
@@ -144,6 +146,9 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 				if (order != null)
 					getWidget().reorderRowsInBody(order);
 			}
+			if (getWidget().recalcWidths)
+				getWidget().scrollBody.resetCellWidths();
+
 			// sanity check (in case the value has slipped beyond the total
 			// amount of rows)
 			getWidget().updateMaxIndent();
@@ -239,6 +244,7 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		getWidget().rendering = false;
 		getWidget().headerChangedDuringUpdate = false;
 
+		// getWidget().triggerLazyColumnAdjustment(true);
 	}
 
 	@Override
