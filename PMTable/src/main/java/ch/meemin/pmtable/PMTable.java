@@ -2092,7 +2092,9 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 			ArrayList<String> keys = new ArrayList<String>();
 			for (Object itemId : removedItemIds) {
 				EnumMap<RowAttributes, Object> atts = rowAttributes.get(itemId);
-				if (!atts.containsKey(RowAttributes.SENT_TO_CLIENT))
+				// if atts are null the row was already removed
+				// if SENT_TO_CLIENT is not set it isn't needed to be removed
+				if (atts == null || !atts.containsKey(RowAttributes.SENT_TO_CLIENT))
 					continue;
 				String key = (String) atts.get(RowAttributes.KEY);
 				keys.add(key);
@@ -3117,11 +3119,14 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	public void setItemRemoved(Object itemId) {
 		if (fullRefresh)
 			return;
-		this.removedItemIds.add(itemId);
+		boolean was_painted = rowAttributes.containsKey(itemId);
+		if (was_painted)
+			this.removedItemIds.add(itemId);
 		removeFromRows(itemId, false);
 		this.insertedItemIds.remove(itemId);
 		this.updatedItemIds.remove(itemId);
-		markAsDirty();
+		if (was_painted)
+			markAsDirty();
 	}
 
 	/**
