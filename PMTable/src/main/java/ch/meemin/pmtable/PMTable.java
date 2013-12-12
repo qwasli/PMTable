@@ -1346,7 +1346,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 						 * property value changes. Otherwise if property emits value change events, table will start to listen them
 						 * and refresh content when needed.
 						 */
-						if (Component.class.isAssignableFrom(getType(colid)) || !(value instanceof Component)) {
+						if (!(value instanceof Component) || !Property.ValueChangeListener.class.isAssignableFrom(value.getClass())) {
 							listenProperty(p, id, oldListenedProperties);
 						}
 					} else {
@@ -1414,7 +1414,6 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 			 * and it is used for a long time.
 			 */
 			listenedProperties.put(p, itemId);
-
 		}
 	}
 
