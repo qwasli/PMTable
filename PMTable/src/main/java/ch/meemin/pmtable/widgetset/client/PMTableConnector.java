@@ -9,7 +9,6 @@ import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.core.client.Scheduler.ScheduledCommand;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.Style.Position;
-import com.google.gwt.user.client.Command;
 import com.google.gwt.user.client.ui.Widget;
 import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
@@ -36,6 +35,17 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 	protected void init() {
 		super.init();
 		getWidget().init(getConnection());
+	}
+
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see com.vaadin.client.ui.AbstractComponentConnector#onUnregister()
+	 */
+	@Override
+	public void onUnregister() {
+		super.onUnregister();
+		getWidget().onUnregister();
 	}
 
 	/*
@@ -160,21 +170,6 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 					getWidget().updateBody(rowData, uidl.getIntAttribute("rows"));
 					if (getWidget().headerChangedDuringUpdate) {
 						getWidget().triggerLazyColumnAdjustment(true);
-					} else if (!getWidget().isScrollPositionVisible()
-							|| getWidget().lastRenderedHeight != getWidget().scrollBody.getOffsetHeight()) {
-						// webkits may still bug with their disturbing scrollbar
-						// bug, see #3457
-						// Run overflow fix for the scrollable area
-						// #6698 - If there's a scroll going on, don't abort it
-						// by changing overflows as the length of the contents
-						// *shouldn't* have changed (unless the number of rows
-						// or the height of the widget has also changed)
-						Scheduler.get().scheduleDeferred(new Command() {
-							@Override
-							public void execute() {
-								Util.runWebkitOverflowAutoFix(getWidget().scrollBodyPanel.getElement());
-							}
-						});
 					}
 				} else {
 					getWidget().initializeRows(uidl, rowData);
@@ -235,7 +230,13 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		getWidget().tabIndex = getState().tabIndex;
 		getWidget().setProperTabIndex();
 
-		getWidget().resizeSortedColumnForSortIndicator();
+		Scheduler.get().scheduleFinally(new ScheduledCommand() {
+
+			@Override
+			public void execute() {
+				getWidget().resizeSortedColumnForSortIndicator();
+			}
+		});
 
 		// Remember this to detect situations where overflow hack might be
 		// needed during scrolling

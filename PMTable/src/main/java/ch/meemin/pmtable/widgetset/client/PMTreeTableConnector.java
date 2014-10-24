@@ -28,6 +28,10 @@ public class PMTreeTableConnector extends PMTableConnector {
 				.getIntAttribute(PMTreeTableConstants.ATTRIBUTE_HIERARCHY_COLUMN_INDEX) : 0;
 		int oldTotalRows = (getWidget().scrollBody != null) ? getWidget().scrollBody.size() : 0;
 		super.updateFromUIDL(uidl, client);
+		// super.updateFromUIDL set rendering to false, even though we continue
+		// rendering here. Set it back to true.
+		getWidget().rendering = true;
+
 		if (getWidget().collapseRequest) {
 			if (getWidget().collapsedRowKey != null && getWidget().scrollBody != null) {
 				PMTableWidgetRow row = getWidget().getRenderedRowByKey(getWidget().collapsedRowKey);
@@ -75,6 +79,7 @@ public class PMTreeTableConnector extends PMTableConnector {
 			PendingNavigationEvent event = getWidget().pendingNavigationEvents.removeFirst();
 			getWidget().handleNavigation(event.keycode, event.ctrl, event.shift);
 		}
+		getWidget().rendering = false;
 	}
 
 	@Override

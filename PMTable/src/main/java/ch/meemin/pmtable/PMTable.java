@@ -1393,7 +1393,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	protected void registerComponent(Object itemId, Component component) {
 		getLogger().log(Level.FINEST, "Registered {0}: {1}",
 				new Object[] { component.getClass().getSimpleName(), component.getCaption() });
-		if (component.getParent() != this) {
+		if (!equals(component.getParent())) {
 			component.setParent(this);
 		}
 		HashSet<Component> comps = visibleComponents.get(itemId);
@@ -1636,6 +1636,23 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 			visibleIds = new ArrayList<Object>();
 		}
 
+		// Retain propertyValueConverters if their corresponding ids are
+		// properties of the new
+		// data source and are of a compatible type
+		if (propertyValueConverters != null) {
+			Collection<?> newPropertyIds = newDataSource.getContainerPropertyIds();
+			LinkedList<Object> retainableValueConverters = new LinkedList<Object>();
+			for (Object propertyId : newPropertyIds) {
+				Converter<String, ?> converter = getConverter(propertyId);
+				if (converter != null) {
+					if (typeIsCompatible(converter.getModelType(), newDataSource.getType(propertyId))) {
+						retainableValueConverters.add(propertyId);
+					}
+				}
+			}
+			propertyValueConverters.keySet().retainAll(retainableValueConverters);
+		}
+
 		// Assures that the data source is ordered by making unordered
 		// containers ordered by wrapping them
 		if (newDataSource instanceof Container.Ordered) {
@@ -1664,6 +1681,20 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		setVisibleColumns(col.toArray());
 
 		fullRefresh(true);
+	}
+
+	/**
+	 * Checks if class b can be safely assigned to class a.
+	 *
+	 * @param a
+	 * @param b
+	 * @return
+	 */
+	private boolean typeIsCompatible(Class<?> a, Class<?> b) {
+		// TODO Implement this check properly
+		// Basically we need to do a a.isAssignableFrom(b)
+		// with special considerations for primitive types.
+		return true;
 	}
 
 	/**
@@ -2684,7 +2715,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 
 	@Override
 	public void valueChange(Property.ValueChangeEvent event) {
-		if (event.getProperty() == this || event.getProperty() == getPropertyDataSource()) {
+		if (equals(event.getProperty()) || event.getProperty() == getPropertyDataSource()) {
 			super.valueChange(event);
 		} else {
 			setItemChanged(listenedProperties.get(event.getProperty()));
@@ -2745,6 +2776,8 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		columnIcons.remove(propertyId);
 		columnHeaders.remove(propertyId);
 		columnFooters.remove(propertyId);
+		// If a propertyValueConverter was defined for the property, remove it.
+		propertyValueConverters.remove(propertyId);
 
 		return super.removeContainerProperty(propertyId);
 	}
@@ -4234,16 +4267,10 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		if (!getContainerPropertyIds().contains(propertyId)) {
 			throw new IllegalArgumentException("PropertyId " + propertyId + " must be in the container");
 		}
-		// FIXME: This check should be here but primitive types like Boolean
-		// formatter for boolean property must be handled
-
-		// if (!converter.getSourceType().isAssignableFrom(getType(propertyId)))
-		// {
-		// throw new IllegalArgumentException("Property type ("
-		// + getType(propertyId)
-		// + ") must match converter source type ("
-		// + converter.getSourceType() + ")");
-		// }
+		if (!typeIsCompatible(converter.getModelType(), getType(propertyId))) {
+			throw new IllegalArgumentException("Property type (" + getType(propertyId)
+					+ ") must match converter source type (" + converter.getModelType() + ")");
+		}
 		propertyValueConverters.put(propertyId, (Converter<String, Object>) converter);
 		fullRefresh(true);
 	}

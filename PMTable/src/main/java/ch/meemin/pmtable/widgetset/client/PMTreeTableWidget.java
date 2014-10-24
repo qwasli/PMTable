@@ -9,7 +9,6 @@ import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.core.client.Scheduler.ScheduledCommand;
 import com.google.gwt.dom.client.Document;
 import com.google.gwt.dom.client.Element;
-import com.google.gwt.dom.client.ImageElement;
 import com.google.gwt.dom.client.SpanElement;
 import com.google.gwt.dom.client.Style.Unit;
 import com.google.gwt.dom.client.TableCellElement;
@@ -19,6 +18,7 @@ import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.ui.Widget;
 import com.vaadin.client.UIDL;
 import com.vaadin.client.Util;
+import com.vaadin.client.ui.Icon;
 
 public class PMTreeTableWidget extends PMTableWidget {
 
@@ -121,12 +121,9 @@ public class PMTreeTableWidget extends PMTableWidget {
 					Element container = (Element) getElement().getLastChild().getFirstChild();
 
 					if (rowUidl.hasAttribute("icon")) {
-						// icons are in first content cell in TreeTable
-						ImageElement icon = Document.get().createImageElement();
-						icon.setClassName("v-icon");
-						icon.setAlt("icon");
-						icon.setSrc(client.translateVaadinUri(rowUidl.getStringAttribute("icon")));
-						container.insertFirst(icon);
+						Icon icon = client.getIcon(rowUidl.getStringAttribute("icon"));
+						icon.setAlternateText("icon");
+						container.insertFirst(icon.getElement());
 					}
 
 					String classname = "v-treetable-treespacer";

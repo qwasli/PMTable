@@ -10,6 +10,8 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import ch.meemin.pmtable.widgetset.client.PMTableWidget.PMTableWidgetBody.PMTableWidgetRow;
 
@@ -23,6 +25,7 @@ import com.google.gwt.dom.client.NodeList;
 import com.google.gwt.dom.client.Style;
 import com.google.gwt.dom.client.Style.Display;
 import com.google.gwt.dom.client.Style.Overflow;
+import com.google.gwt.dom.client.Style.TextAlign;
 import com.google.gwt.dom.client.Style.Unit;
 import com.google.gwt.dom.client.Style.Visibility;
 import com.google.gwt.dom.client.TableCellElement;
@@ -31,8 +34,6 @@ import com.google.gwt.dom.client.TableSectionElement;
 import com.google.gwt.dom.client.Touch;
 import com.google.gwt.event.dom.client.BlurEvent;
 import com.google.gwt.event.dom.client.BlurHandler;
-import com.google.gwt.event.dom.client.ContextMenuEvent;
-import com.google.gwt.event.dom.client.ContextMenuHandler;
 import com.google.gwt.event.dom.client.FocusEvent;
 import com.google.gwt.event.dom.client.FocusHandler;
 import com.google.gwt.event.dom.client.KeyCodes;
@@ -51,6 +52,8 @@ import com.google.gwt.user.client.Command;
 import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.Element;
 import com.google.gwt.user.client.Event;
+import com.google.gwt.user.client.Event.NativePreviewEvent;
+import com.google.gwt.user.client.Event.NativePreviewHandler;
 import com.google.gwt.user.client.Timer;
 import com.google.gwt.user.client.Window;
 import com.google.gwt.user.client.ui.FlowPanel;
@@ -64,6 +67,7 @@ import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ConnectorMap;
+import com.vaadin.client.DeferredWorker;
 import com.vaadin.client.Focusable;
 import com.vaadin.client.MouseEventDetailsBuilder;
 import com.vaadin.client.TooltipInfo;
@@ -79,6 +83,7 @@ import com.vaadin.client.ui.TreeAction;
 import com.vaadin.client.ui.VContextMenu;
 import com.vaadin.client.ui.VEmbedded;
 import com.vaadin.client.ui.VLabel;
+import com.vaadin.client.ui.VScrollTable;
 import com.vaadin.client.ui.VTextField;
 import com.vaadin.client.ui.VTreeTable;
 import com.vaadin.client.ui.dd.DDUtil;
@@ -91,9 +96,139 @@ import com.vaadin.client.ui.dd.VTransferable;
 import com.vaadin.shared.AbstractComponentState;
 import com.vaadin.shared.MouseEventDetails;
 import com.vaadin.shared.ui.dd.VerticalDropLocation;
+import com.vaadin.shared.ui.table.TableConstants;
 
 public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandler, VHasDropHandler, FocusHandler,
-		BlurHandler, Focusable, ActionOwner {
+		BlurHandler, Focusable, ActionOwner, DeferredWorker {
+
+	/**
+	 * Simple interface for parts of the table capable of owning a context menu.
+	 *
+	 * @since 7.2
+	 * @author Vaadin Ltd
+	 */
+	private interface ContextMenuOwner {
+		public void showContextMenu(Event event);
+	}
+
+	/**
+	 * Handles showing context menu on "long press" from a touch screen.
+	 *
+	 * @since 7.2
+	 * @author Vaadin Ltd
+	 */
+	private class TouchContextProvider {
+		private static final int TOUCH_CONTEXT_MENU_TIMEOUT = 500;
+		private Timer contextTouchTimeout;
+
+		private Event touchStart;
+		private int touchStartY;
+		private int touchStartX;
+
+		private ContextMenuOwner target;
+
+		/**
+		 * Initializes a handler for a certain context menu owner.
+		 *
+		 * @param target
+		 *          the owner of the context menu
+		 */
+		public TouchContextProvider(ContextMenuOwner target) {
+			this.target = target;
+		}
+
+		/**
+		 * Cancels the current context touch timeout.
+		 */
+		public void cancel() {
+			if (contextTouchTimeout != null) {
+				contextTouchTimeout.cancel();
+				contextTouchTimeout = null;
+			}
+			touchStart = null;
+		}
+
+		/**
+		 * A function to handle touch context events in a table.
+		 *
+		 * @param event
+		 *          browser event to handle
+		 */
+		public void handleTouchEvent(final Event event) {
+			int type = event.getTypeInt();
+
+			switch (type) {
+			case Event.ONCONTEXTMENU:
+				target.showContextMenu(event);
+				break;
+			case Event.ONTOUCHSTART:
+				// save position to fields, touches in events are same
+				// instance during the operation.
+				touchStart = event;
+
+				Touch touch = event.getChangedTouches().get(0);
+				touchStartX = touch.getClientX();
+				touchStartY = touch.getClientY();
+
+				if (contextTouchTimeout == null) {
+					contextTouchTimeout = new Timer() {
+
+						@Override
+						public void run() {
+							if (touchStart != null) {
+								// Open the context menu if finger
+								// is held in place long enough.
+								target.showContextMenu(touchStart);
+								event.preventDefault();
+								touchStart = null;
+							}
+						}
+					};
+				}
+				contextTouchTimeout.schedule(TOUCH_CONTEXT_MENU_TIMEOUT);
+				break;
+			case Event.ONTOUCHCANCEL:
+			case Event.ONTOUCHEND:
+				cancel();
+				break;
+			case Event.ONTOUCHMOVE:
+				if (isSignificantMove(event)) {
+					// Moved finger before the context menu timer
+					// expired, so let the browser handle the event.
+					cancel();
+				}
+			}
+		}
+
+		/**
+		 * Calculates how many pixels away the user's finger has traveled. This reduces the chance of small non-intentional
+		 * movements from canceling the long press detection.
+		 *
+		 * @param event
+		 *          the Event for which to check the move distance
+		 * @return true if this is considered an intentional move by the user
+		 */
+		protected boolean isSignificantMove(Event event) {
+			if (touchStart == null) {
+				// no touch start
+				return false;
+			}
+
+			// Calculate the distance between touch start and the current touch
+			// position
+			Touch touch = event.getChangedTouches().get(0);
+			int deltaX = touch.getClientX() - touchStartX;
+			int deltaY = touch.getClientY() - touchStartY;
+			int delta = deltaX * deltaX + deltaY * deltaY;
+
+			// Compare to the square of the significant move threshold to remove
+			// the need for a square root
+			if (delta > TouchScrollDelegate.SIGNIFICANT_MOVE_THRESHOLD * TouchScrollDelegate.SIGNIFICANT_MOVE_THRESHOLD) {
+				return true;
+			}
+			return false;
+		}
+	}
 
 	public static final String STYLENAME = "v-table";
 
@@ -271,12 +406,12 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			ArrayList<SelectionRange> ranges = new ArrayList<SelectionRange>(2);
 
 			int endOfFirstRange = row.getIndex() - 1;
-			if (!(endOfFirstRange - startRow.getIndex() < 0)) {
+			if (endOfFirstRange >= startRow.getIndex()) {
 				// create range of first part unless its length is < 1
 				ranges.add(new SelectionRange(startRow, endOfFirstRange - startRow.getIndex() + 1));
 			}
 			int startOfSecondRange = row.getIndex() + 1;
-			if (!(getEndIndex() - startOfSecondRange < 0)) {
+			if (getEndIndex() >= startOfSecondRange) {
 				// create range of second part unless its length is < 1
 				PMTableWidgetRow startOfRange = scrollBody.getRowByRowIndex(startOfSecondRange);
 				if (startOfRange != null) {
@@ -310,8 +445,47 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 	/** For internal use only. May be removed or replaced in the future. */
 	public final TableFooter tFoot = new TableFooter();
 
+	/** Handles context menu for table body */
+	private ContextMenuOwner contextMenuOwner = new ContextMenuOwner() {
+
+		@Override
+		public void showContextMenu(Event event) {
+			int left = Util.getTouchOrMouseClientX(event);
+			int top = Util.getTouchOrMouseClientY(event);
+			boolean menuShown = handleBodyContextMenu(left, top);
+			if (menuShown) {
+				event.stopPropagation();
+				event.preventDefault();
+			}
+		}
+	};
+
+	/** Handles touch events to display a context menu for table body */
+	private TouchContextProvider touchContextProvider = new TouchContextProvider(contextMenuOwner);
+
+	/**
+	 * For internal use only. May be removed or replaced in the future.
+	 *
+	 * Overwrites onBrowserEvent function on FocusableScrollPanel to give event access to touchContextProvider. Has to be
+	 * public to give TableConnector access to the scrollBodyPanel field.
+	 *
+	 * @since 7.2
+	 * @author Vaadin Ltd
+	 */
+	public class FocusableScrollContextPanel extends FocusableScrollPanel {
+		@Override
+		public void onBrowserEvent(Event event) {
+			super.onBrowserEvent(event);
+			touchContextProvider.handleTouchEvent(event);
+		};
+
+		public FocusableScrollContextPanel(boolean useFakeFocusElement) {
+			super(useFakeFocusElement);
+		}
+	}
+
 	/** For internal use only. May be removed or replaced in the future. */
-	public final FocusableScrollPanel scrollBodyPanel = new FocusableScrollPanel(true);
+	public final FocusableScrollContextPanel scrollBodyPanel = new FocusableScrollContextPanel(true);
 
 	private KeyPressHandler navKeyPressHandler = new KeyPressHandler() {
 
@@ -510,6 +684,47 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 	private boolean hadScrollBars = false;
 
+	private HandlerRegistration addCloseHandler;
+
+	/**
+	 * Changes to manage mouseDown and mouseUp
+	 */
+	/**
+	 * The element where the last mouse down event was registered.
+	 */
+	private Element lastMouseDownTarget;
+
+	/**
+	 * Set to true by {@link #mouseUpPreviewHandler} if it gets a mouseup at the same element as
+	 * {@link #lastMouseDownTarget}.
+	 */
+	private boolean mouseUpPreviewMatched = false;
+
+	private HandlerRegistration mouseUpEventPreviewRegistration;
+
+	/**
+	 * Previews events after a mousedown to detect where the following mouseup hits.
+	 */
+	private final NativePreviewHandler mouseUpPreviewHandler = new NativePreviewHandler() {
+
+		@Override
+		public void onPreviewNativeEvent(NativePreviewEvent event) {
+			if (event.getTypeInt() == Event.ONMOUSEUP) {
+				mouseUpEventPreviewRegistration.removeHandler();
+
+				// Event's reported target not always correct if event
+				// capture is in use
+				Element elementUnderMouse = Util.getElementUnderMouse(event.getNativeEvent());
+				if (lastMouseDownTarget != null && lastMouseDownTarget.isOrHasChild(elementUnderMouse)) {
+					mouseUpPreviewMatched = true;
+				} else {
+					getLogger().log(Level.FINEST,
+							"Ignoring mouseup from " + elementUnderMouse + " when mousedown was on " + lastMouseDownTarget);
+				}
+			}
+		}
+	};
+
 	public PMTableWidget() {
 		setMultiSelectMode(MULTISELECT_MODE_DEFAULT);
 
@@ -529,16 +744,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		}
 		scrollBodyPanel.addKeyUpHandler(navKeyUpHandler);
 
-		scrollBodyPanel.sinkEvents(Event.TOUCHEVENTS);
-
-		scrollBodyPanel.sinkEvents(Event.ONCONTEXTMENU);
-		scrollBodyPanel.addDomHandler(new ContextMenuHandler() {
-
-			@Override
-			public void onContextMenu(ContextMenuEvent event) {
-				handleBodyContextMenu(event);
-			}
-		}, ContextMenuEvent.getType());
+		scrollBodyPanel.sinkEvents(Event.TOUCHEVENTS | Event.ONCONTEXTMENU);
 
 		setStyleName(STYLENAME);
 
@@ -587,8 +793,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		this.client = client;
 		// Add a handler to clear saved context menu details when the menu
 		// closes. See #8526.
-		client.getContextMenu().addCloseHandler(new CloseHandler<PopupPanel>() {
-
+		addCloseHandler = client.getContextMenu().addCloseHandler(new CloseHandler<PopupPanel>() {
 			@Override
 			public void onClose(CloseEvent<PopupPanel> event) {
 				contextMenu = null;
@@ -596,19 +801,23 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		});
 	}
 
-	private void handleBodyContextMenu(ContextMenuEvent event) {
+	/**
+	 * Handles a context menu event on table body.
+	 *
+	 * @param left
+	 *          left position of the context menu
+	 * @param top
+	 *          top position of the context menu
+	 * @return true if a context menu was shown, otherwise false
+	 */
+	private boolean handleBodyContextMenu(int left, int top) {
 		if (enabled && bodyActionKeys != null) {
-			int left = Util.getTouchOrMouseClientX(event.getNativeEvent());
-			int top = Util.getTouchOrMouseClientY(event.getNativeEvent());
 			top += Window.getScrollTop();
 			left += Window.getScrollLeft();
 			client.getContextMenu().showAt(this, left, top);
-
-			// Only prevent browser context menu if there are action handlers
-			// registered
-			event.stopPropagation();
-			event.preventDefault();
+			return true;
 		}
+		return false;
 	}
 
 	/**
@@ -768,6 +977,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 			// Send the selected row ranges
 			client.updateVariable(paintableId, "selectedRanges", ranges.toArray(new String[selectedRowRanges.size()]), false);
+			selectedRowRanges.clear();
 
 			// clean selectedRowKeys so that they don't contain excess values
 			for (Iterator<String> iterator = selectedRowKeys.iterator(); iterator.hasNext();) {
@@ -991,6 +1201,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		// cell to accomodate for the size of the sort arrow.
 		HeaderCell sortedHeader = tHead.getHeaderCell(sortColumn);
 		if (sortedHeader != null) {
+			// Mark header as sorted now.Any earlier marking would lead to
+			// columns with wrong sizes
+			sortedHeader.setSorted(true);
 			tHead.resizeCaptionContainer(sortedHeader);
 		}
 		// Also recalculate the width of the captionContainer element in the
@@ -1837,13 +2050,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		/*
 		 * Ensures the column alignments are correct at initial loading. <br/> (child components widths are correct)
 		 */
-		Scheduler.get().scheduleDeferred(new Command() {
-
-			@Override
-			public void execute() {
-				Util.runWebkitOverflowAutoFix(scrollBodyPanel.getElement());
-			}
-		});
+		Util.runWebkitOverflowAutoFixDeferred(scrollBodyPanel.getElement());
 
 		hadScrollBars = willHaveScrollbarz;
 	}
@@ -1871,7 +2078,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 	/** For internal use only. May be removed or replaced in the future. */
 	public void hideScrollPositionAnnotation() {
 		if (scrollPositionElement != null) {
-			DOM.setStyleAttribute(scrollPositionElement, "display", "none");
+			scrollPositionElement.getStyle().setDisplay(Display.NONE);
 		}
 	}
 
@@ -2028,11 +2235,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			}
 			if (width == -1) {
 				// go to default mode, clip content if necessary
-				DOM.setStyleAttribute(captionContainer, "overflow", "");
+				captionContainer.getStyle().clearOverflow();
 			}
 			width = w;
 			if (w == -1) {
-				DOM.setStyleAttribute(captionContainer, "width", "");
+				captionContainer.getStyle().clearWidth();
 				setWidth("");
 			} else {
 				tHead.resizeCaptionContainer(this);
@@ -2068,7 +2275,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 		public void setUndefinedWidth() {
 			definedWidth = false;
-			setWidth(-1, false);
+			if (!isResizing) {
+				setWidth(-1, false);
+			}
 		}
 
 		/**
@@ -2174,16 +2383,16 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			DOM.setElementProperty(floatingCopyOfHeaderCell, "className", PMTableWidget.this.getStylePrimaryName()
 					+ "-header-drag");
 			// otherwise might wrap or be cut if narrow column
-			DOM.setStyleAttribute(floatingCopyOfHeaderCell, "width", "auto");
+			floatingCopyOfHeaderCell.getStyle().setProperty("width", "auto");
 			updateFloatingCopysPosition(DOM.getAbsoluteLeft(td), DOM.getAbsoluteTop(td));
 			DOM.appendChild(RootPanel.get().getElement(), floatingCopyOfHeaderCell);
 		}
 
 		private void updateFloatingCopysPosition(int x, int y) {
 			x -= DOM.getElementPropertyInt(floatingCopyOfHeaderCell, "offsetWidth") / 2;
-			DOM.setStyleAttribute(floatingCopyOfHeaderCell, "left", x + "px");
+			floatingCopyOfHeaderCell.getStyle().setLeft(x, Unit.PX);
 			if (y > 0) {
-				DOM.setStyleAttribute(floatingCopyOfHeaderCell, "top", (y + 7) + "px");
+				floatingCopyOfHeaderCell.getStyle().setTop(y + 7, Unit.PX);
 			}
 		}
 
@@ -2544,8 +2753,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				table.setPropertyInt("cellSpacing", 0);
 			}
 
-			DOM.setStyleAttribute(hTableWrapper, "overflow", "hidden");
-			DOM.setStyleAttribute(columnSelector, "display", "none");
+			hTableWrapper.getStyle().setOverflow(Overflow.HIDDEN);
+			columnSelector.getStyle().setDisplay(Display.NONE);
 
 			DOM.appendChild(table, headerTableBody);
 			DOM.appendChild(headerTableBody, tr);
@@ -2650,11 +2859,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 				if (col.hasAttribute("sortable")) {
 					c.setSortable(true);
-					if (cid.equals(sortColumn)) {
-						c.setSorted(true);
-					} else {
-						c.setSorted(false);
-					}
+					c.setSorted(false);
 				} else {
 					c.setSortable(false);
 				}
@@ -2665,7 +2870,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					c.setAlign(ALIGN_LEFT);
 
 				}
-				if (col.hasAttribute("width")) {
+				if (col.hasAttribute("width") && !c.isResizing) {
 					// Make sure to accomodate for the sort indicator if
 					// necessary.
 					int width = col.getIntAttribute("width");
@@ -3080,7 +3285,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			setText(headerText);
 
 			// ensure no clipping initially (problem on column additions)
-			DOM.setStyleAttribute(captionContainer, "overflow", "visible");
+			captionContainer.getStyle().setOverflow(Overflow.VISIBLE);
 
 			DOM.sinkEvents(captionContainer, Event.MOUSEEVENTS);
 
@@ -3121,13 +3326,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			if (align != c) {
 				switch (c) {
 				case ALIGN_CENTER:
-					DOM.setStyleAttribute(captionContainer, "textAlign", "center");
+					captionContainer.getStyle().setTextAlign(TextAlign.CENTER);
 					break;
 				case ALIGN_RIGHT:
-					DOM.setStyleAttribute(captionContainer, "textAlign", "right");
+					captionContainer.getStyle().setTextAlign(TextAlign.RIGHT);
 					break;
 				default:
-					DOM.setStyleAttribute(captionContainer, "textAlign", "");
+					captionContainer.getStyle().setTextAlign(TextAlign.LEFT);
 					break;
 				}
 			}
@@ -3164,11 +3369,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			}
 			if (width == -1) {
 				// go to default mode, clip content if necessary
-				DOM.setStyleAttribute(captionContainer, "overflow", "");
+				captionContainer.getStyle().clearOverflow();
 			}
 			width = w;
 			if (w == -1) {
-				DOM.setStyleAttribute(captionContainer, "width", "");
+				captionContainer.getStyle().clearWidth();
 				setWidth("");
 			} else {
 				/*
@@ -3409,7 +3614,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 		public TableFooter() {
 
-			DOM.setStyleAttribute(hTableWrapper, "overflow", "hidden");
+			hTableWrapper.getStyle().setOverflow(Overflow.HIDDEN);
 
 			DOM.appendChild(table, headerTableBody);
 			DOM.appendChild(headerTableBody, tr);
@@ -3531,7 +3736,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 				}
 				if (col.hasAttribute("width")) {
-					if (scrollBody == null) {
+					if (scrollBody == null || isNewBody) {
 						// Already updated by setColWidth called from
 						// TableHeads.updateCellsFromUIDL in case of a server
 						// side resize
@@ -3628,14 +3833,14 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		 * Disable browser measurement of the table width
 		 */
 		public void disableBrowserIntelligence() {
-			DOM.setStyleAttribute(hTableContainer, "width", WRAPPER_WIDTH + "px");
+			hTableContainer.getStyle().setWidth(WRAPPER_WIDTH, Unit.PX);
 		}
 
 		/**
 		 * Enable browser measurement of the table width
 		 */
 		public void enableBrowserIntelligence() {
-			DOM.setStyleAttribute(hTableContainer, "width", "");
+			hTableContainer.getStyle().clearWidth();
 		}
 
 		/**
@@ -4012,7 +4217,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			}
 		}
 
-		public class PMTableWidgetRow extends Panel implements ActionOwner {
+		public class PMTableWidgetRow extends Panel implements ActionOwner, ContextMenuOwner {
 
 			private static final int TOUCHSCROLL_TIMEOUT = 100;
 			private static final int DRAGMODE_MULTIROW = 2;
@@ -4030,6 +4235,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			private Timer dragTouchTimeout;
 			private int touchStartY;
 			private int touchStartX;
+
+			private TouchContextProvider touchContextProvider = new TouchContextProvider(this);
+
 			private TooltipInfo tooltipInfo = null;
 			private Map<TableCellElement, TooltipInfo> cellToolTips = new HashMap<TableCellElement, TooltipInfo>();
 			private boolean isDragging = false;
@@ -4058,7 +4266,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 				String rowDescription = uidl.getStringAttribute("rowdescr");
 				if (rowDescription != null && !rowDescription.equals("")) {
-					tooltipInfo = new TooltipInfo(rowDescription);
+					tooltipInfo = new TooltipInfo(rowDescription, null, this);
 				} else {
 					tooltipInfo = null;
 				}
@@ -4185,24 +4393,6 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			}
 
 			/**
-			 * Detects whether row is visible in tables viewport.
-			 * 
-			 * @return
-			 */
-			public boolean isInViewPort() {
-				int absoluteTop = getAbsoluteTop();
-				int scrollPosition = scrollBodyPanel.getAbsoluteTop() + scrollBodyPanel.getScrollPosition();
-				if (absoluteTop < scrollPosition) {
-					return false;
-				}
-				int maxVisible = scrollPosition + scrollBodyPanel.getOffsetHeight() - getOffsetHeight();
-				if (absoluteTop > maxVisible) {
-					return false;
-				}
-				return true;
-			}
-
-			/**
 			 * Makes a check based on indexes whether the row is before the compared row.
 			 * 
 			 * @param row1
@@ -4282,17 +4472,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				} else {
 					container.setInnerText(text);
 				}
-				if (align != ALIGN_LEFT) {
-					switch (align) {
-					case ALIGN_CENTER:
-						container.getStyle().setProperty("textAlign", "center");
-						break;
-					case ALIGN_RIGHT:
-					default:
-						container.getStyle().setProperty("textAlign", "right");
-						break;
-					}
-				}
+				setAlign(align, container);
 				setTooltip(td, description);
 
 				td.appendChild(container);
@@ -4319,12 +4499,27 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 			private void setTooltip(TableCellElement td, String description) {
 				if (description != null && !description.equals("")) {
-					TooltipInfo info = new TooltipInfo(description);
+					TooltipInfo info = new TooltipInfo(description, null, this);
 					cellToolTips.put(td, info);
 				} else {
 					cellToolTips.remove(td);
 				}
 
+			}
+
+			private void setAlign(char align, final Element container) {
+				switch (align) {
+				case ALIGN_CENTER:
+					container.getStyle().setProperty("textAlign", "center");
+					break;
+				case ALIGN_LEFT:
+					container.getStyle().setProperty("textAlign", "left");
+					break;
+				case ALIGN_RIGHT:
+				default:
+					container.getStyle().setProperty("textAlign", "right");
+					break;
+				}
 			}
 
 			protected void initCellWithWidget(Widget w, char align, String style, boolean sorted, final TableCellElement td) {
@@ -4338,21 +4533,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				}
 				td.setClassName(className);
 				container.setClassName(PMTableWidget.this.getStylePrimaryName() + "-cell-wrapper");
-				// TODO most components work with this, but not all (e.g.
-				// Select)
-				// Old comment: make widget cells respect align.
-				// text-align:center for IE, margin: auto for others
-				if (align != ALIGN_LEFT) {
-					switch (align) {
-					case ALIGN_CENTER:
-						container.getStyle().setProperty("textAlign", "center");
-						break;
-					case ALIGN_RIGHT:
-					default:
-						container.getStyle().setProperty("textAlign", "right");
-						break;
-					}
-				}
+
+				setAlign(align, container);
 				td.appendChild(container);
 				getElement().appendChild(td);
 				// ensure widget not attached to another element (possible tBody
@@ -4455,6 +4637,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				boolean touchEventHandled = false;
 
 				if (enabled && hasNativeTouchScrolling) {
+					touchContextProvider.handleTouchEvent(event);
+
 					final Element targetTdOrTr = getEventTargetTdOrTr(event);
 					final int type = event.getTypeInt();
 
@@ -4570,7 +4754,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 						showContextMenu(event);
 						if (enabled
 								&& (actionKeys != null || client.hasEventListeners(PMTableWidget.this,
-										PMTableConstants.ITEM_CLICK_EVENT_ID))) {
+										TableConstants.ITEM_CLICK_EVENT_ID))) {
 							/*
 							 * Prevent browser context menu only if there are action handlers or item click listeners registered
 							 */
@@ -4589,88 +4773,101 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 						}
 						break;
 					case Event.ONMOUSEUP:
-						if (targetCellOrRowFound) {
-							/*
-							 * Queue here, send at the same time as the corresponding value change event - see #7127
-							 */
-							boolean clickEventSent = handleClickEvent(event, targetTdOrTr, false);
+						/*
+						 * Only fire a click if the mouseup hits the same element as the corresponding mousedown. This is first
+						 * checked in the event preview but we can't fire the event there as the event might get canceled before it
+						 * gets here.
+						 */
+						if (mouseUpPreviewMatched && lastMouseDownTarget != null
+								&& lastMouseDownTarget == getElementTdOrTr(Util.getElementUnderMouse(event))) {
+							// "Click" with left, right or middle button
 
-							if (event.getButton() == Event.BUTTON_LEFT && isSelectable()) {
+							if (targetCellOrRowFound) {
+								/*
+								 * Queue here, send at the same time as the corresponding value change event - see #7127
+								 */
+								boolean clickEventSent = handleClickEvent(event, targetTdOrTr, false);
 
-								// Ctrl+Shift click
-								if ((event.getCtrlKey() || event.getMetaKey()) && event.getShiftKey() && isMultiSelectModeDefault()) {
-									toggleShiftSelection(false);
-									setRowFocus(this);
+								if (event.getButton() == Event.BUTTON_LEFT && isSelectable()) {
 
-									// Ctrl click
-								} else if ((event.getCtrlKey() || event.getMetaKey()) && isMultiSelectModeDefault()) {
-									boolean wasSelected = isSelected();
-									toggleSelection();
-									setRowFocus(this);
-									/*
-									 * next possible range select must start on this row
-									 */
-									selectionRangeStart = this;
-									if (wasSelected) {
-										removeRowFromUnsentSelectionRanges(this);
-									}
+									// Ctrl+Shift click
+									if ((event.getCtrlKey() || event.getMetaKey()) && event.getShiftKey() && isMultiSelectModeDefault()) {
+										toggleShiftSelection(false);
+										setRowFocus(this);
 
-								} else if ((event.getCtrlKey() || event.getMetaKey()) && isSingleSelectMode()) {
-									// Ctrl (or meta) click (Single selection)
-									if (!isSelected() || (isSelected() && nullSelectionAllowed)) {
-
-										if (!isSelected()) {
-											deselectAll();
+										// Ctrl click
+									} else if ((event.getCtrlKey() || event.getMetaKey()) && isMultiSelectModeDefault()) {
+										boolean wasSelected = isSelected();
+										toggleSelection();
+										setRowFocus(this);
+										/*
+										 * next possible range select must start on this row
+										 */
+										selectionRangeStart = this;
+										if (wasSelected) {
+											removeRowFromUnsentSelectionRanges(this);
 										}
 
-										toggleSelection();
+									} else if ((event.getCtrlKey() || event.getMetaKey()) && isSingleSelectMode()) {
+										// Ctrl (or meta) click (Single
+										// selection)
+										if (!isSelected() || (isSelected() && nullSelectionAllowed)) {
+
+											if (!isSelected()) {
+												deselectAll();
+											}
+
+											toggleSelection();
+											setRowFocus(this);
+										}
+
+									} else if (event.getShiftKey() && isMultiSelectModeDefault()) {
+										// Shift click
+										toggleShiftSelection(true);
+
+									} else {
+										// click
+										boolean currentlyJustThisRowSelected = selectedRowKeys.size() == 1
+												&& selectedRowKeys.contains(getKey());
+
+										if (!currentlyJustThisRowSelected) {
+											if (isSingleSelectMode() || isMultiSelectModeDefault()) {
+												/*
+												 * For default multi select mode (ctrl/shift) and for single select mode we need to clear the
+												 * previous selection before selecting a new one when the user clicks on a row. Only in
+												 * multiselect/simple mode the old selection should remain after a normal click.
+												 */
+												deselectAll();
+											}
+											toggleSelection();
+										} else if ((isSingleSelectMode() || isMultiSelectModeSimple()) && nullSelectionAllowed) {
+											toggleSelection();
+										}/*
+											 * else NOP to avoid excessive server visits (selection is removed with CTRL/META click)
+											 */
+
+										selectionRangeStart = this;
 										setRowFocus(this);
 									}
 
-								} else if (event.getShiftKey() && isMultiSelectModeDefault()) {
-									// Shift click
-									toggleShiftSelection(true);
-
-								} else {
-									// click
-									boolean currentlyJustThisRowSelected = selectedRowKeys.size() == 1
-											&& selectedRowKeys.contains(getKey());
-
-									if (!currentlyJustThisRowSelected) {
-										if (isSingleSelectMode() || isMultiSelectModeDefault()) {
-											/*
-											 * For default multi select mode (ctrl/shift) and for single select mode we need to clear the
-											 * previous selection before selecting a new one when the user clicks on a row. Only in
-											 * multiselect/simple mode the old selection should remain after a normal click.
-											 */
-											deselectAll();
-										}
-										toggleSelection();
-									} else if ((isSingleSelectMode() || isMultiSelectModeSimple()) && nullSelectionAllowed) {
-										toggleSelection();
-									}/*
-										 * else NOP to avoid excessive server visits (selection is removed with CTRL/META click)
-										 */
-
-									selectionRangeStart = this;
-									setRowFocus(this);
+									// Remove IE text selection hack
+									if (BrowserInfo.get().isIE()) {
+										((Element) event.getEventTarget().cast()).setPropertyJSO("onselectstart", null);
+									}
+									// Queue value change
+									sendSelectedRows(false);
 								}
-
-								// Remove IE text selection hack
-								if (BrowserInfo.get().isIE()) {
-									((Element) event.getEventTarget().cast()).setPropertyJSO("onselectstart", null);
+								/*
+								 * Send queued click and value change events if any If a click event is sent, send value change with it
+								 * regardless of the immediate flag, see #7127
+								 */
+								if (immediate || clickEventSent) {
+									client.sendPendingVariableChanges();
 								}
-								// Queue value change
-								sendSelectedRows(false);
-							}
-							/*
-							 * Send queued click and value change events if any If a click event is sent, send value change with it
-							 * regardless of the immediate flag, see #7127
-							 */
-							if (immediate || clickEventSent) {
-								client.sendPendingVariableChanges();
 							}
 						}
+						mouseUpPreviewMatched = false;
+						lastMouseDownTarget = null;
 						break;
 					case Event.ONTOUCHEND:
 					case Event.ONTOUCHCANCEL:
@@ -4681,9 +4878,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 							Util.simulateClickFromTouchEvent(touchStart, this);
 							touchStart = null;
 						}
-						if (contextTouchTimeout != null) {
-							contextTouchTimeout.cancel();
-						}
+						touchContextProvider.cancel();
 						break;
 					case Event.ONTOUCHMOVE:
 						if (isSignificantMove(event)) {
@@ -4694,9 +4889,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 							if (dragmode != 0 && touchStart != null && (TouchScrollDelegate.getActiveScrollDelegate() == null)) {
 								startRowDrag(touchStart, type, targetTdOrTr);
 							}
-							if (contextTouchTimeout != null) {
-								contextTouchTimeout.cancel();
-							}
+							touchContextProvider.cancel();
 							/*
 							 * Avoid clicks and drags by clearing touch start flag.
 							 */
@@ -4762,6 +4955,14 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 						}
 						break;
 					case Event.ONMOUSEDOWN:
+						/*
+						 * When getting a mousedown event, we must detect where the corresponding mouseup event if it's on a
+						 * different part of the page.
+						 */
+						lastMouseDownTarget = getElementTdOrTr(Util.getElementUnderMouse(event));
+						mouseUpPreviewMatched = false;
+						mouseUpEventPreviewRegistration = Event.addNativePreviewHandler(mouseUpPreviewHandler);
+
 						if (targetCellOrRowFound) {
 							setRowFocus(this);
 							ensureFocus();
@@ -4880,8 +5081,12 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			 */
 			private Element getEventTargetTdOrTr(Event event) {
 				final Element eventTarget = event.getEventTarget().cast();
-				Widget widget = Util.findWidget(eventTarget, null);
-				final Element thisTrElement = getElement();
+				return getElementTdOrTr(eventTarget);
+			}
+
+			private Element getElementTdOrTr(Element element) {
+
+				Widget widget = Util.findWidget(element, null);
 
 				if (widget != this) {
 					/*
@@ -4898,9 +5103,10 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 						return null;
 					}
 				}
-				return getTdOrTr(eventTarget);
+				return getTdOrTr(element);
 			}
 
+			@Override
 			public void showContextMenu(Event event) {
 				if (enabled && actionKeys != null) {
 					// Show context menu if there are registered action handlers
@@ -5292,6 +5498,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 			while (headCells.hasNext()) {
 				final HeaderCell hCell = (HeaderCell) headCells.next();
+				if (hCell.isResizing) {
+					continue;
+				}
 				boolean hasIndent = hierarchyColumnIndent > 0 && hCell.isHierarchyColumn();
 				if (hCell.isDefinedWidth()) {
 					// get width without indent to find out whether adjustments
@@ -5423,7 +5632,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				colIndex = 0;
 				while (headCells.hasNext()) {
 					HeaderCell hc = (HeaderCell) headCells.next();
-					if (!hc.isDefinedWidth()) {
+					if (!hc.isResizing && !hc.isDefinedWidth()) {
 						setColWidth(colIndex, hc.getWidthWithIndent() + availW - checksum, false);
 						break;
 					}
@@ -5442,17 +5651,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				int heightBefore = getOffsetHeight();
 				scrollBodyPanel.setHeight(bodyHeight + "px");
 				if (heightBefore != getOffsetHeight()) {
-					Util.notifyParentOfSizeChange(PMTableWidget.this, false);
+					Util.notifyParentOfSizeChange(PMTableWidget.this, rendering);
 				}
 			}
-			Scheduler.get().scheduleDeferred(new Command() {
-
-				@Override
-				public void execute() {
-					Util.runWebkitOverflowAutoFix(scrollBodyPanel.getElement());
-				}
-			});
-
 			forceRealignColumnHeaders();
 		}
 
@@ -5546,11 +5747,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 	private int getContentAreaBorderHeight() {
 		if (contentAreaBorderHeight < 0) {
 
-			DOM.setStyleAttribute(scrollBodyPanel.getElement(), "overflow", "hidden");
+			scrollBodyPanel.getElement().getStyle().setOverflow(Overflow.HIDDEN);
 			int oh = scrollBodyPanel.getOffsetHeight();
 			int ch = scrollBodyPanel.getElement().getPropertyInt("clientHeight");
 			contentAreaBorderHeight = oh - ch;
-			DOM.setStyleAttribute(scrollBodyPanel.getElement(), "overflow", "auto");
+			scrollBodyPanel.getElement().getStyle().setOverflow(Overflow.AUTO);
 		}
 		return contentAreaBorderHeight;
 	}
@@ -5569,22 +5770,6 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 	/** For internal use only. May be removed or replaced in the future. */
 	public void updateHeight() {
 		setContainerHeight();
-
-		if (!rendering) {
-			// Webkit may sometimes get an odd rendering bug (white space
-			// between header and body), see bug #3875. Running
-			// overflow hack here to shake body element a bit.
-			// We must run the fix as a deferred command to prevent it from
-			// overwriting the scroll position with an outdated value, see
-			// #7607.
-			Scheduler.get().scheduleDeferred(new Command() {
-
-				@Override
-				public void execute() {
-					Util.runWebkitOverflowAutoFix(scrollBodyPanel.getElement());
-				}
-			});
-		}
 
 		triggerLazyColumnAdjustment(false);
 
@@ -5708,7 +5893,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			dropDetails = new TableDDDetails();
 			Element elementOver = drag.getElementOver();
 
-			PMTableWidgetRow row = Util.findWidget(elementOver, getRowClass());
+			Class<? extends Widget> clazz = getRowClass();
+			PMTableWidgetRow row = null;
+			if (clazz != null) {
+				row = Util.findWidget(elementOver, clazz);
+			}
 			if (row != null) {
 				dropDetails.overkey = row.rowKey;
 				Element tr = row.getElement();
@@ -5730,7 +5919,12 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		private Class<? extends Widget> getRowClass() {
 			// get the row type this way to make dd work in derived
 			// implementations
-			return scrollBody.iterator().next().getClass();
+			Iterator<Widget> iterator = scrollBody.iterator();
+			if (iterator.hasNext()) {
+				return iterator.next().getClass();
+			} else {
+				return null;
+			}
 		}
 
 		@Override
@@ -6360,4 +6554,24 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		return this;
 	}
 
+	/**
+	 * @since
+	 */
+	public void onUnregister() {
+		if (addCloseHandler != null) {
+			addCloseHandler.removeHandler();
+		}
+	}
+
+	/*
+	 * Return true if component need to perform some work and false otherwise.
+	 */
+	@Override
+	public boolean isWorkPending() {
+		return lazyAdjustColumnWidths.isRunning();
+	}
+
+	private static Logger getLogger() {
+		return Logger.getLogger(VScrollTable.class.getName());
+	}
 }
