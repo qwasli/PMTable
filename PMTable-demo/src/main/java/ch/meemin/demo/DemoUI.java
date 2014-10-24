@@ -91,7 +91,7 @@ public class DemoUI extends UI implements Handler, DropHandler {
 		for (int i = 0; i < 10; i++) {
 			Object o = pmTreeTable.addItem();
 			boolean b = rand.nextBoolean();
-			Label l = new Label(b ? "foo<br />bar" : "foobar");
+			Label l = new Label(b ? "foo<br />bar<br />blub" : "foobar");
 			if (b)
 				l.setContentMode(ContentMode.HTML);
 			pmTreeTable.getItem(o).getItemProperty(2).setValue(l);

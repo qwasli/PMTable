@@ -33,13 +33,5 @@
     <inherits name="com.vaadin.DefaultWidgetSet" />
     
 
-    
-
-    
-
-    
-
-    
-
     <inherits name="ch.meemin.pmtable.widgetset.PMTableWidgetSet" />
 </module>
