@@ -1488,6 +1488,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			Collections.reverse(ixs);
 			for (int i : ixs)
 				scrollBody.unlinkRow(i);
+
+			scrollBody.reindexFrom(ixs.get(ixs.size() - 1));
 		}
 		scrollBody.insertRows(partialRowAdditions);
 		scrollBody.reindexFrom(0);

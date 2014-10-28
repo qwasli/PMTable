@@ -1,5 +1,7 @@
 package ch.meemin.demo;
 
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.Random;
 
 import javax.servlet.annotation.WebServlet;
@@ -142,11 +144,28 @@ public class DemoUI extends UI implements Handler, DropHandler {
 		});
 		HorizontalLayout addLine = new HorizontalLayout(stringField, lableField, b);
 
+		Button addNRemove = new Button("add and remove", new ClickListener() {
+
+			@Override
+			public void buttonClick(ClickEvent event) {
+				Collection<?> itemIds = pmTreeTable.getItemIds();
+				if (itemIds.size() > 0) {
+					Iterator<?> it = itemIds.iterator();
+					Object id = it.next();
+					pmTreeTable.removeItem(id);
+					while (it.hasNext())
+						id = it.next();
+					pmTreeTable.setItemInserted(id);
+					pmTreeTable.addItem();
+				}
+			}
+		});
+
 		Label title = new Label("PMTreeTable Demo");
 		title.setStyleName(Reindeer.LABEL_H1);
 		Label description = new Label("Try Right-Click and Drag'n'Drop");
 
-		final VerticalLayout layout = new VerticalLayout(title, description, pmTreeTable, addLine);
+		final VerticalLayout layout = new VerticalLayout(title, description, addNRemove, addLine);
 		layout.setWidth(100, Unit.PERCENTAGE);
 		layout.addComponent(pmTreeTable);
 		layout.addComponent(table);
