@@ -2409,7 +2409,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		}
 	}
 
-	private boolean rowHeadersAreEnabled() {
+	protected boolean rowHeadersAreEnabled() {
 		return getRowHeaderMode() != RowHeaderMode.HIDDEN;
 	}
 
