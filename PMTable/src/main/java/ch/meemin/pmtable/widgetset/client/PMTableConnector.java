@@ -148,9 +148,18 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		UIDL partialRowUpdates = uidl.getChildByTagName("urows");
 		if (partialRowUpdates != null || partialRowAdditions != null) {
 			getWidget().postponeSanityCheckForLastRendered = true;
-
+			final int scrollP = getWidget().scrollBodyPanel.getScrollPosition();
 			getWidget().addAndRemoveRows(partialRowAdditions);
 			getWidget().updateRowsInBody(partialRowUpdates);
+			Scheduler.get().scheduleDeferred(new ScheduledCommand() {
+
+				@Override
+				public void execute() {
+					// Window.alert("Scroll To: " + scrollP);
+					getWidget().scrollBodyPanel.setScrollPosition(scrollP);
+				}
+			});
+
 			if (uidl.hasAttribute("reorder")) {
 				String[] order = uidl.getStringArrayAttribute("reorder");
 				if (order != null)

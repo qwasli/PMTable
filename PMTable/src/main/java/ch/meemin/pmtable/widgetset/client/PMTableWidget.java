@@ -1455,12 +1455,12 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		while (it.hasNext()) {
 			UIDL next = (UIDL) it.next();
 			int ix = next.getIntAttribute("index");
-			scrollBody.unlinkRow(ix);
 			PMTableWidgetRow row = scrollBody.prepareRow(next);
 			scrollBody.insertRowAt(row, ix);
 			if (focusedRow != null && focusedRow.getIndex() == ix)
 				setRowFocus(row);
 			row.getElement().getStyle().setProperty("visibility", "");
+			scrollBody.unlinkRow(ix + 1);
 		}
 	}
 
