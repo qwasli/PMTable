@@ -2451,6 +2451,14 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				if (columnReordering && Util.isTouchEventOrLeftMouseButton(event)) {
 					dragging = false;
 					DOM.releaseCapture(getElement());
+
+					if (Util.isTouchEvent(event)) {
+						/*
+						 * Prevent using in e.g. scrolling and prevent generated events.
+						 */
+						event.preventDefault();
+						event.stopPropagation();
+					}
 					if (moved) {
 						hideFloatingCopy();
 						tHead.removeSlotFocus();
@@ -2461,13 +2469,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 								reOrderColumn(cid, closestSlot);
 							}
 						}
-					}
-					if (Util.isTouchEvent(event)) {
-						/*
-						 * Prevent using in e.g. scrolling and prevent generated events.
-						 */
-						event.preventDefault();
-						event.stopPropagation();
+						moved = false;
+						break;
 					}
 				}
 
@@ -6092,9 +6095,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 			// Set new focused row
 			focusedRow = row;
-
-			ensureRowIsVisible(row);
-
+			if (hasFocus) {
+				ensureRowIsVisible(row);
+			}
 			return true;
 		}
 
