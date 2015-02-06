@@ -106,6 +106,8 @@ public class PMTreeTableWidget extends PMTableWidget {
 
 			public PMTreeTableWidgetRow(UIDL uidl, char[] aligns2) {
 				super(uidl, aligns2);
+				// this fix causes #15118 and doesn't work for treetable anyway
+				applyZeroWidthFix = false;
 			}
 
 			@Override

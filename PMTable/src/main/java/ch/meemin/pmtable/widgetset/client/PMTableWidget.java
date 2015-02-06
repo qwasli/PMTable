@@ -4262,6 +4262,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			private Map<TableCellElement, TooltipInfo> cellToolTips = new HashMap<TableCellElement, TooltipInfo>();
 			private boolean isDragging = false;
 			private String rowStyle = null;
+			protected boolean applyZeroWidthFix = true;
 
 			private PMTableWidgetRow(int rowKey) {
 				this.rowKey = rowKey;
@@ -4363,7 +4364,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					 * Some versions of Webkit and Opera ignore the width definition of zero width table cells. Instead, use 1px
 					 * and compensate with a negative margin.
 					 */
-					if (width == 0) {
+					if (applyZeroWidthFix && width == 0) {
 						wrapperWidth = 1;
 						wrapperStyle.setMarginRight(-1, Unit.PX);
 					} else {
