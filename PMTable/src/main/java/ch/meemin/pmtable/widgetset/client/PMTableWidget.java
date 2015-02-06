@@ -1831,6 +1831,8 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			final HeaderCell hCell = (HeaderCell) headCells.next();
 			final FooterCell fCell = (FooterCell) footCells.next();
 			boolean needsIndent = hierarchyColumnIndent > 0 && hCell.isHierarchyColumn();
+			hCell.saveNaturalColumnWidthIfNotSaved(i);
+			fCell.saveNaturalColumnWidthIfNotSaved(i);
 			int w = hCell.getWidth();
 			if (hCell.isDefinedWidth()) {
 				// server has defined column width explicitly
@@ -1856,8 +1858,10 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					int footerWidth = fCell.getNaturalColumnWidth(i);
 					w = headerWidth > footerWidth ? headerWidth : footerWidth;
 				}
-				hCell.setNaturalMinimumColumnWidth(w);
-				fCell.setNaturalMinimumColumnWidth(w);
+				if (w != 0) {
+					hCell.setNaturalMinimumColumnWidth(w);
+					fCell.setNaturalMinimumColumnWidth(w);
+				}
 			}
 			widths[i] = w;
 			total += w;
@@ -2282,6 +2286,10 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			}
 		}
 
+		private void setUndefinedWidthFlagOnly() {
+			definedWidth = false;
+		}
+
 		/**
 		 * Detects if width is fixed by developer on server side or resized to current width by user.
 		 * 
@@ -2644,6 +2652,28 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			return align;
 		}
 
+		protected void saveNaturalColumnWidthIfNotSaved(int columnIndex) {
+			if (naturalWidth < 0) {
+				// This is recently revealed column. Try to detect a proper
+				// value (greater of header and data columns)
+
+				int hw = captionContainer.getOffsetWidth() + getHeaderPadding();
+				if (BrowserInfo.get().isGecko()) {
+					hw += sortIndicator.getOffsetWidth();
+				}
+				if (columnIndex < 0) {
+					columnIndex = 0;
+					for (Iterator<Widget> it = tHead.iterator(); it.hasNext(); columnIndex++) {
+						if (it.next() == this) {
+							break;
+						}
+					}
+				}
+				final int cw = scrollBody.getColWidth(columnIndex);
+				naturalWidth = (hw > cw ? hw : cw);
+			}
+		}
+
 		/**
 		 * Detects the natural minimum width for the column of this header cell. If column is resized by user or the width
 		 * is defined by server the actual width is returned. Else the natural min width is returned.
@@ -2655,31 +2685,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		 */
 		public int getNaturalColumnWidth(int columnIndex) {
 			final int iw = columnIndex == getHierarchyColumnIndex() ? scrollBody.getMaxIndent() : 0;
+			saveNaturalColumnWidthIfNotSaved(columnIndex);
 			if (isDefinedWidth()) {
 				if (iw > width) {
 					return iw;
 				}
 				return width;
 			} else {
-				if (naturalWidth < 0) {
-					// This is recently revealed column. Try to detect a proper
-					// value (greater of header and data columns)
-
-					int hw = captionContainer.getOffsetWidth() + getHeaderPadding();
-					if (BrowserInfo.get().isGecko()) {
-						hw += sortIndicator.getOffsetWidth();
-					}
-					if (columnIndex < 0) {
-						columnIndex = 0;
-						for (Iterator<Widget> it = tHead.iterator(); it.hasNext(); columnIndex++) {
-							if (it.next() == this) {
-								break;
-							}
-						}
-					}
-					final int cw = scrollBody.getColWidth(columnIndex);
-					naturalWidth = (hw > cw ? hw : cw);
-				}
 				if (iw > naturalWidth) {
 					// indent is temporary value, naturalWidth shouldn't be
 					// updated
@@ -2908,7 +2920,7 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					}
 				} else if (col.hasAttribute("er")) {
 					c.setExpandRatio(col.getFloatAttribute("er"));
-
+					c.setUndefinedWidthFlagOnly();
 				} else if (recalcWidths) {
 					c.setUndefinedWidth();
 
@@ -3532,6 +3544,25 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			return cid;
 		}
 
+		protected void saveNaturalColumnWidthIfNotSaved(int columnIndex) {
+			if (naturalWidth < 0) {
+				// This is recently revealed column. Try to detect a proper
+				// value (greater of header and data cols)
+
+				final int hw = ((Element) getElement().getLastChild()).getOffsetWidth() + getHeaderPadding();
+				if (columnIndex < 0) {
+					columnIndex = 0;
+					for (Iterator<Widget> it = tHead.iterator(); it.hasNext(); columnIndex++) {
+						if (it.next() == this) {
+							break;
+						}
+					}
+				}
+				final int cw = scrollBody.getColWidth(columnIndex);
+				naturalWidth = (hw > cw ? hw : cw);
+			}
+		}
+
 		/**
 		 * Detects the natural minimum width for the column of this header cell. If column is resized by user or the width
 		 * is defined by server the actual width is returned. Else the natural min width is returned.
@@ -3543,29 +3574,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		 */
 		public int getNaturalColumnWidth(int columnIndex) {
 			final int iw = columnIndex == getHierarchyColumnIndex() ? scrollBody.getMaxIndent() : 0;
+			saveNaturalColumnWidthIfNotSaved(columnIndex);
 			if (isDefinedWidth()) {
 				if (iw > width) {
 					return iw;
 				}
 				return width;
 			} else {
-				if (naturalWidth < 0) {
-					// This is recently revealed column. Try to detect a proper
-					// value (greater of header and data
-					// cols)
-
-					final int hw = ((Element) getElement().getLastChild()).getOffsetWidth() + getHeaderPadding();
-					if (columnIndex < 0) {
-						columnIndex = 0;
-						for (Iterator<Widget> it = tHead.iterator(); it.hasNext(); columnIndex++) {
-							if (it.next() == this) {
-								break;
-							}
-						}
-					}
-					final int cw = scrollBody.getColWidth(columnIndex);
-					naturalWidth = (hw > cw ? hw : cw);
-				}
 				if (iw > naturalWidth) {
 					return iw;
 				} else {
@@ -5518,6 +5533,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				} else {
 					// natural width already includes indent if any
 					int naturalColumnWidth = hCell.getNaturalColumnWidth(colIndex);
+					/*
+					 * TODO If there is extra width, expand ratios are for additional extra widths, not for absolute column
+					 * widths. Should be fixed in sizeInit(), too.
+					 */
+					if (hCell.getExpandRatio() > 0) {
+						naturalColumnWidth = 0;
+					}
 					usedMinimumWidth += naturalColumnWidth;
 					expandRatioDivider += hCell.getExpandRatio();
 					if (hasIndent) {
@@ -5608,6 +5630,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					int newSpace;
 					if (expandRatioDivider > 0) {
 						// divide excess space by expand ratios
+						if (hCell.getExpandRatio() > 0) {
+							w = 0;
+						}
 						newSpace = Math.round((w + extraSpace * hCell.getExpandRatio() / expandRatioDivider));
 					} else {
 						if (hierarchyHeaderInNeedOfFurtherHandling == hCell) {
