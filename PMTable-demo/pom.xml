@@ -5,7 +5,7 @@
 	<packaging>war</packaging>
 	<name>PMTable Add-on Demo</name>
 	<groupId>ch.meemin</groupId>
-	<version>1.8-SNAPSHOT</version>
+	<version>1.8</version>
 
 	<organization>
 		<name>a4D Architekten AG</name>
