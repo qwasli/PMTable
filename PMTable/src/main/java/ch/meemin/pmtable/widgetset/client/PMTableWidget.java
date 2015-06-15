@@ -4439,13 +4439,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 				// applied when indexes are updated.
 				String primaryStyleName = getStylePrimaryName();
 				if (primaryStyleName != null && !primaryStyleName.equals("")) {
-					removeStyleName(getStylePrimaryName());
+					removeStyleName(primaryStyleName);
 				}
-				if (!isOdd) {
-					addStyleName(PMTableWidget.this.getStylePrimaryName() + "-row-odd");
-				} else {
-					addStyleName(PMTableWidget.this.getStylePrimaryName() + "-row");
-				}
+				String primaryTableStyle = PMTableWidget.this.getStylePrimaryName();
+
+				setStyleName(primaryTableStyle + (isOdd ? "-row" : "-row-odd"));
+				updateStyleNames(primaryTableStyle);
+
 			}
 
 			public int getIndex() {
