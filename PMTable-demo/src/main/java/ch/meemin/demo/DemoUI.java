@@ -6,6 +6,8 @@ import java.util.Random;
 
 import javax.servlet.annotation.WebServlet;
 
+import ch.meemin.pmtable.PMTable.ColumnCollapsingEvent;
+import ch.meemin.pmtable.PMTable.ColumnCollapsingListener;
 import ch.meemin.pmtable.PMTable.TableDragMode;
 import ch.meemin.pmtable.PMTableHierarchicalContainer;
 import ch.meemin.pmtable.PMTreeTable;
@@ -35,6 +37,7 @@ import com.vaadin.ui.Button.ClickEvent;
 import com.vaadin.ui.Button.ClickListener;
 import com.vaadin.ui.HorizontalLayout;
 import com.vaadin.ui.Label;
+import com.vaadin.ui.Notification;
 import com.vaadin.ui.Table;
 import com.vaadin.ui.TextField;
 import com.vaadin.ui.TreeTable;
@@ -45,7 +48,7 @@ import com.vaadin.ui.themes.Reindeer;
 @Theme("demo")
 @Title("PMTable Demo")
 @SuppressWarnings("serial")
-public class DemoUI extends UI implements Handler, DropHandler {
+public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapsingListener {
 
 	@WebServlet(value = "/*", asyncSupported = true)
 	@VaadinServletConfiguration(productionMode = false, ui = DemoUI.class, widgetset = "ch.meemin.demo.DemoWidgetSet")
@@ -83,6 +86,8 @@ public class DemoUI extends UI implements Handler, DropHandler {
 		// pmTreeTable.setColumnExpandRatio(2, 1f);
 		pmTreeTable.setColumnWidth(1, -1);
 		pmTreeTable.setColumnWidth(2, -1);
+		pmTreeTable.setColumnCollapsingAllowed(true);
+		pmTreeTable.addColumnCollapsingListener(this);
 
 		table.addContainerProperty(1, String.class, "foo");
 		table.addContainerProperty(2, Label.class, null);
@@ -220,5 +225,13 @@ public class DemoUI extends UI implements Handler, DropHandler {
 	@Override
 	public AcceptCriterion getAcceptCriterion() {
 		return SourceIsTarget.get();
+	}
+
+	@Override
+	public void columnCollapse(ColumnCollapsingEvent event) {
+		if (event.isCollapse())
+			Notification.show("Column collapsed: " + event.getPropertyId());
+		else
+			Notification.show("Column expanded: " + event.getPropertyId());
 	}
 }

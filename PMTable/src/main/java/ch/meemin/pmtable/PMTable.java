@@ -1854,9 +1854,15 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 						if (isColumnCollapsed(propertyId)) {
 							if (!idSet.contains(propertyId)) {
 								setColumnCollapsed(propertyId, false);
+								if (hasListeners(ColumnCollapsingEvent.class)) {
+									fireEvent(new ColumnCollapsingEvent(this, propertyId, false));
+								}
 							}
 						} else if (idSet.contains(propertyId)) {
 							setColumnCollapsed(propertyId, true);
+							if (hasListeners(ColumnCollapsingEvent.class)) {
+								fireEvent(new ColumnCollapsingEvent(this, propertyId, true));
+							}
 						}
 					}
 				} catch (final Exception e) {
@@ -4036,6 +4042,80 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	@Deprecated
 	public void removeListener(ColumnResizeListener listener) {
 		removeColumnResizeListener(listener);
+	}
+
+	/**
+	 * This event is fired when a columns are reordered by the end user user.
+	 */
+	public static class ColumnCollapsingEvent extends Component.Event {
+		public static final Method METHOD;
+
+		static {
+			try {
+				METHOD = ColumnCollapsingListener.class.getDeclaredMethod("columnCollapse",
+						new Class[] { ColumnCollapsingEvent.class });
+			} catch (final java.lang.NoSuchMethodException e) {
+				// This should never happen
+				throw new java.lang.RuntimeException(e);
+			}
+		}
+
+		private boolean collapse;
+		private Object propertyId;
+
+		/**
+		 * Constructor
+		 * 
+		 * @param source
+		 *          The source of the event
+		 */
+		public ColumnCollapsingEvent(Component source, Object propertyId, boolean collapse) {
+			super(source);
+			this.propertyId = propertyId;
+			this.collapse = collapse;
+		}
+
+		public Object getPropertyId() {
+			return propertyId;
+		}
+
+		public boolean isCollapse() {
+			return collapse;
+		}
+	}
+
+	/**
+	 * Interface for listening to column reorder events.
+	 */
+	public interface ColumnCollapsingListener extends Serializable {
+
+		/**
+		 * This method is triggered when the column has been reordered
+		 * 
+		 * @param event
+		 */
+		public void columnCollapse(ColumnCollapsingEvent event);
+	}
+
+	/**
+	 * Adds a column reorder listener to the Table. A column reorder listener is called when a user reorders columns.
+	 * 
+	 * @param listener
+	 *          The listener to attach to the Table
+	 */
+	public void addColumnCollapsingListener(ColumnCollapsingListener listener) {
+		addListener(PMTableConstants.COLUMN_COLLAPSING_EVENT_ID, ColumnCollapsingEvent.class, listener,
+				ColumnCollapsingEvent.METHOD);
+	}
+
+	/**
+	 * Removes a column reorder listener from the Table.
+	 * 
+	 * @param listener
+	 *          The listener to remove
+	 */
+	public void removeColumnCollapsingListener(ColumnCollapsingListener listener) {
+		removeListener(PMTableConstants.COLUMN_COLLAPSING_EVENT_ID, ColumnCollapsingEvent.class, listener);
 	}
 
 	/**
