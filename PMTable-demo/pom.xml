@@ -5,7 +5,7 @@
 	<packaging>war</packaging>
 	<name>PMTable Add-on Demo</name>
 	<groupId>ch.meemin</groupId>
-	<version>1.8</version>
+	<version>1.9</version>
 
 	<organization>
 		<name>a4D Architekten AG</name>
@@ -40,7 +40,7 @@
 
 	<properties>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-		<vaadin.version>7.3.3</vaadin.version>
+		<vaadin.version>7.6.1</vaadin.version>
 		<vaadin.plugin.version>${vaadin.version}</vaadin.plugin.version>
 	</properties>
 

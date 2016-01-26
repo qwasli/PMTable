@@ -6,8 +6,8 @@ import java.util.Random;
 
 import javax.servlet.annotation.WebServlet;
 
-import ch.meemin.pmtable.PMTable.ColumnCollapsingEvent;
-import ch.meemin.pmtable.PMTable.ColumnCollapsingListener;
+import ch.meemin.pmtable.PMTable.ColumnCollapseEvent;
+import ch.meemin.pmtable.PMTable.ColumnCollapseListener;
 import ch.meemin.pmtable.PMTable.TableDragMode;
 import ch.meemin.pmtable.PMTableHierarchicalContainer;
 import ch.meemin.pmtable.PMTreeTable;
@@ -48,7 +48,7 @@ import com.vaadin.ui.themes.Reindeer;
 @Theme("demo")
 @Title("PMTable Demo")
 @SuppressWarnings("serial")
-public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapsingListener {
+public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapseListener {
 
 	@WebServlet(value = "/*", asyncSupported = true)
 	@VaadinServletConfiguration(productionMode = false, ui = DemoUI.class, widgetset = "ch.meemin.demo.DemoWidgetSet")
@@ -87,7 +87,7 @@ public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapsing
 		pmTreeTable.setColumnWidth(1, -1);
 		pmTreeTable.setColumnWidth(2, -1);
 		pmTreeTable.setColumnCollapsingAllowed(true);
-		pmTreeTable.addColumnCollapsingListener(this);
+		pmTreeTable.addColumnCollapseListener(this);
 
 		table.addContainerProperty(1, String.class, "foo");
 		table.addContainerProperty(2, Label.class, null);
@@ -228,10 +228,11 @@ public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapsing
 	}
 
 	@Override
-	public void columnCollapse(ColumnCollapsingEvent event) {
-		if (event.isCollapse())
-			Notification.show("Column collapsed: " + event.getPropertyId());
+	public void columnCollapseStateChange(ColumnCollapseEvent event) {
+		final Object propertyId = event.getPropertyId();
+		if (pmTreeTable.isColumnCollapsed(propertyId))
+			Notification.show("Column collapsed: " + propertyId);
 		else
-			Notification.show("Column expanded: " + event.getPropertyId());
+			Notification.show("Column expanded: " + propertyId);
 	}
 }
