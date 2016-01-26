@@ -1,35 +1,54 @@
 package ch.meemin.pmtable.widgetset.client;
 
+import java.util.Collections;
 import java.util.Iterator;
+import java.util.List;
 
 import ch.meemin.pmtable.PMTable;
+import ch.meemin.pmtable.widgetset.client.PMTableConstants.Section;
+import ch.meemin.pmtable.widgetset.client.PMTableWidget.FooterCell;
+import ch.meemin.pmtable.widgetset.client.PMTableWidget.HeaderCell;
 import ch.meemin.pmtable.widgetset.client.PMTableWidget.PMTableWidgetBody.PMTableWidgetRow;
 
 import com.google.gwt.core.client.Scheduler;
 import com.google.gwt.core.client.Scheduler.ScheduledCommand;
 import com.google.gwt.dom.client.Element;
+import com.google.gwt.dom.client.EventTarget;
 import com.google.gwt.dom.client.Style.Position;
+import com.google.gwt.event.shared.HandlerRegistration;
 import com.google.gwt.user.client.ui.Widget;
 import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ConnectorHierarchyChangeEvent;
+import com.vaadin.client.ConnectorHierarchyChangeEvent.ConnectorHierarchyChangeHandler;
 import com.vaadin.client.DirectionalManagedLayout;
+import com.vaadin.client.HasChildMeasurementHintConnector;
+import com.vaadin.client.HasComponentsConnector;
 import com.vaadin.client.Paintable;
 import com.vaadin.client.ServerConnector;
 import com.vaadin.client.TooltipInfo;
 import com.vaadin.client.UIDL;
 import com.vaadin.client.Util;
-import com.vaadin.client.ui.AbstractHasComponentsConnector;
+import com.vaadin.client.WidgetUtil;
+import com.vaadin.client.ui.AbstractFieldConnector;
 import com.vaadin.client.ui.PostLayoutListener;
+import com.vaadin.shared.MouseEventDetails;
 import com.vaadin.shared.ui.Connect;
 
 // Connector binds client-side widget class to server-side component class
 // Connector lives in the client and the @Connect annotation specifies the
 // corresponding server-side component
 @Connect(PMTable.class)
-public class PMTableConnector extends AbstractHasComponentsConnector implements Paintable, DirectionalManagedLayout,
-		PostLayoutListener {
+public class PMTableConnector extends AbstractFieldConnector implements HasComponentsConnector,
+		ConnectorHierarchyChangeHandler, Paintable, DirectionalManagedLayout, PostLayoutListener,
+		HasChildMeasurementHintConnector {
+
+	private List<ComponentConnector> childComponents;
+
+	public PMTableConnector() {
+		addConnectorHierarchyChangeHandler(this);
+	}
 
 	@Override
 	protected void init() {
@@ -46,6 +65,59 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 	public void onUnregister() {
 		super.onUnregister();
 		getWidget().onUnregister();
+	}
+
+	@Override
+	protected void sendContextClickEvent(MouseEventDetails details, EventTarget eventTarget) {
+
+		if (!Element.is(eventTarget)) {
+			return;
+		}
+		Element e = Element.as(eventTarget);
+
+		Section section;
+		String colKey = null;
+		String rowKey = null;
+		if (getWidget().tFoot.getElement().isOrHasChild(e)) {
+			section = Section.FOOTER;
+			FooterCell w = WidgetUtil.findWidget(e, FooterCell.class);
+			colKey = w.getColKey();
+		} else if (getWidget().tHead.getElement().isOrHasChild(e)) {
+			section = Section.HEADER;
+			HeaderCell w = WidgetUtil.findWidget(e, HeaderCell.class);
+			colKey = w.getColKey();
+		} else {
+			section = Section.BODY;
+			if (getWidget().scrollBody.getElement().isOrHasChild(e)) {
+				PMTableWidgetRow w = getScrollTableRow(e);
+				/*
+				 * if w is null because we've clicked on an empty area, we will let rowKey and colKey be null too, which will
+				 * then lead to the server side returning a null object.
+				 */
+				if (w != null) {
+					rowKey = w.getKey();
+					colKey = getWidget().tHead.getHeaderCell(getElementIndex(e, w.getElement())).getColKey();
+				}
+			}
+		}
+
+		getRpcProxy(PMTableServerRpc.class).contextClick(rowKey, colKey, section, details);
+
+		WidgetUtil.clearTextSelection();
+	}
+
+	protected PMTableWidgetRow getScrollTableRow(Element e) {
+		return WidgetUtil.findWidget(e, PMTableWidgetRow.class);
+	}
+
+	private int getElementIndex(Element e, com.google.gwt.user.client.Element element) {
+		int i = 0;
+		Element current = element.getFirstChildElement();
+		while (!current.isOrHasChild(e)) {
+			current = current.getNextSiblingElement();
+			++i;
+		}
+		return i;
 	}
 
 	/*
@@ -99,6 +171,10 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		getWidget().immediate = getState().immediate;
 
 		getWidget().updateDragMode(uidl);
+
+		// Update child measure hint
+		int childMeasureHint = uidl.hasAttribute("measurehint") ? uidl.getIntAttribute("measurehint") : 0;
+		getWidget().setChildMeasurementHint(ChildMeasurementHint.values()[childMeasureHint]);
 
 		getWidget().updateSelectionProperties(uidl, getState(), isReadOnly());
 
@@ -254,6 +330,8 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		getWidget().rendering = false;
 		getWidget().headerChangedDuringUpdate = false;
 
+		getWidget().collapsibleMenuContent = getState().collapseMenuContent;
+
 		// getWidget().triggerLazyColumnAdjustment(true);
 	}
 
@@ -373,4 +451,32 @@ public class PMTableConnector extends AbstractHasComponentsConnector implements 
 		}
 	}
 
+	@Override
+	public List<ComponentConnector> getChildComponents() {
+		if (childComponents == null) {
+			return Collections.emptyList();
+		}
+
+		return childComponents;
+	}
+
+	@Override
+	public void setChildComponents(List<ComponentConnector> childComponents) {
+		this.childComponents = childComponents;
+	}
+
+	@Override
+	public HandlerRegistration addConnectorHierarchyChangeHandler(ConnectorHierarchyChangeHandler handler) {
+		return ensureHandlerManager().addHandler(ConnectorHierarchyChangeEvent.TYPE, handler);
+	}
+
+	@Override
+	public void setChildMeasurementHint(ChildMeasurementHint hint) {
+		getWidget().setChildMeasurementHint(hint);
+	}
+
+	@Override
+	public ChildMeasurementHint getChildMeasurementHint() {
+		return getWidget().getChildMeasurementHint();
+	}
 }

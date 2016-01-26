@@ -10,6 +10,7 @@ import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.TooltipInfo;
 import com.vaadin.client.UIDL;
 import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.ui.FocusableScrollPanel;
 import com.vaadin.shared.ui.Connect;
 
@@ -111,5 +112,10 @@ public class PMTreeTableConnector extends PMTableConnector {
 		}
 
 		return info;
+	}
+	
+	@Override
+  protected PMTreeTableWidgetRow getScrollTableRow(Element e) {
+		return WidgetUtil.findWidget(e, PMTreeTableWidgetRow.class);
 	}
 }

@@ -21,7 +21,11 @@ import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import ch.meemin.pmtable.widgetset.client.PMTableCollapseMenuContent;
 import ch.meemin.pmtable.widgetset.client.PMTableConstants;
+import ch.meemin.pmtable.widgetset.client.PMTableConstants.Section;
+import ch.meemin.pmtable.widgetset.client.PMTableServerRpc;
+import ch.meemin.pmtable.widgetset.client.PMTableState;
 
 import com.vaadin.data.Container;
 import com.vaadin.data.Item;
@@ -32,6 +36,7 @@ import com.vaadin.data.util.converter.Converter;
 import com.vaadin.data.util.converter.ConverterUtil;
 import com.vaadin.event.Action;
 import com.vaadin.event.Action.Handler;
+import com.vaadin.event.ContextClickEvent;
 import com.vaadin.event.DataBoundTransferable;
 import com.vaadin.event.ItemClickEvent;
 import com.vaadin.event.ItemClickEvent.ItemClickListener;
@@ -50,16 +55,19 @@ import com.vaadin.server.PaintTarget;
 import com.vaadin.server.Resource;
 import com.vaadin.shared.MouseEventDetails;
 import com.vaadin.shared.ui.MultiSelectMode;
+import com.vaadin.shared.ui.table.CollapseMenuContent;
 import com.vaadin.ui.AbstractSelect;
 import com.vaadin.ui.Component;
 import com.vaadin.ui.DefaultFieldFactory;
 import com.vaadin.ui.Field;
+import com.vaadin.ui.HasChildMeasurementHint;
 import com.vaadin.ui.HasComponents;
 import com.vaadin.ui.TableFieldFactory;
 import com.vaadin.ui.UniqueSerializable;
+import com.vaadin.util.ReflectTools;
 
 public class PMTable extends AbstractSelect implements Action.Container, Container.Ordered, Container.Sortable,
-		ItemClickNotifier, DragSource, DropTarget, HasComponents {
+		ItemClickNotifier, DragSource, DropTarget, HasComponents, HasChildMeasurementHint {
 	private static final long serialVersionUID = 1L;
 
 	private transient Logger logger = null;
@@ -207,6 +215,11 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 
 	private static final String ROW_HEADER_COLUMN_KEY = "0";
 	private static final Object ROW_HEADER_FAKE_PROPERTY_ID = new UniqueSerializable() {};
+
+	/**
+	 * How layout manager should behave when measuring Table's child components
+	 */
+	private ChildMeasurementHint childMeasurementHint = ChildMeasurementHint.MEASURE_ALWAYS;
 
 	/* Private table extensions to Select */
 
@@ -403,6 +416,17 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	 */
 	public PMTable() {
 		setRowHeaderMode(RowHeaderMode.HIDDEN);
+		registerRpc(new PMTableServerRpc() {
+
+			@Override
+			public void contextClick(String rowKey, String colKey,
+					ch.meemin.pmtable.widgetset.client.PMTableConstants.Section section, MouseEventDetails details) {
+				Object itemId = itemIdMapper.get(rowKey);
+				Object propertyId = columnIdMap.get(colKey);
+				fireEvent(new PMTableContextClickEvent(PMTable.this, details, itemId, propertyId, section));
+
+			}
+		});
 		setContainerDataSource(new PMTableIndexedContainer());
 	}
 
@@ -475,18 +499,6 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 				throw new IllegalArgumentException("Ids must be unique, duplicate id: " + visibleColumns[i]);
 			} else {
 				newVC.add(visibleColumns[i]);
-			}
-		}
-
-		// Removes alignments, icons and headers from hidden columns
-		if (this.visibleColumns != null) {
-			for (final Iterator<Object> i = this.visibleColumns.iterator(); i.hasNext();) {
-				final Object col = i.next();
-				if (!newVC.contains(col)) {
-					setColumnHeader(col, null);
-					setColumnAlignment(col, (Align) null);
-					setColumnIcon(col, null);
-				}
 			}
 		}
 
@@ -959,11 +971,18 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		if (collapsed && noncollapsibleColumns.contains(propertyId)) {
 			throw new IllegalStateException("The column is noncollapsible!");
 		}
+		if (!getContainerPropertyIds().contains(propertyId) && !columnGenerators.containsKey(propertyId)) {
+			throw new IllegalArgumentException("Property '" + propertyId + "' was not found in the container");
+		}
 
 		if (collapsed) {
-			collapsedColumns.add(propertyId);
+			if (collapsedColumns.add(propertyId)) {
+				fireColumnCollapseEvent(propertyId);
+			}
 		} else {
-			collapsedColumns.remove(propertyId);
+			if (collapsedColumns.remove(propertyId)) {
+				fireColumnCollapseEvent(propertyId);
+			}
 		}
 
 		// Assures the visual refresh
@@ -1854,15 +1873,9 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 						if (isColumnCollapsed(propertyId)) {
 							if (!idSet.contains(propertyId)) {
 								setColumnCollapsed(propertyId, false);
-								if (hasListeners(ColumnCollapsingEvent.class)) {
-									fireEvent(new ColumnCollapsingEvent(this, propertyId, false));
-								}
 							}
 						} else if (idSet.contains(propertyId)) {
 							setColumnCollapsed(propertyId, true);
-							if (hasListeners(ColumnCollapsingEvent.class)) {
-								fireEvent(new ColumnCollapsingEvent(this, propertyId, true));
-							}
 						}
 					}
 				} catch (final Exception e) {
@@ -1990,6 +2003,10 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 				fireColumnResizeEvent(propertyId, previousWidth, currentWidth);
 			}
 		}
+	}
+
+	private void fireColumnCollapseEvent(Object propertyId) {
+		fireEvent(new ColumnCollapseEvent(this, propertyId));
 	}
 
 	private void fireColumnResizeEvent(Object propertyId, int previousWidth, int currentWidth) {
@@ -4045,22 +4062,14 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	}
 
 	/**
-	 * This event is fired when a columns are reordered by the end user user.
+	 * This event is fired when the collapse state of a column changes.
+	 * 
+	 * @since 7.6
 	 */
-	public static class ColumnCollapsingEvent extends Component.Event {
-		public static final Method METHOD;
+	public static class ColumnCollapseEvent extends Component.Event {
 
-		static {
-			try {
-				METHOD = ColumnCollapsingListener.class.getDeclaredMethod("columnCollapse",
-						new Class[] { ColumnCollapsingEvent.class });
-			} catch (final java.lang.NoSuchMethodException e) {
-				// This should never happen
-				throw new java.lang.RuntimeException(e);
-			}
-		}
-
-		private boolean collapse;
+		public static final Method METHOD = ReflectTools.findMethod(ColumnCollapseListener.class,
+				"columnCollapseStateChange", ColumnCollapseEvent.class);
 		private Object propertyId;
 
 		/**
@@ -4068,54 +4077,62 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		 * 
 		 * @param source
 		 *          The source of the event
+		 * @param propertyId
+		 *          The id of the column
 		 */
-		public ColumnCollapsingEvent(Component source, Object propertyId, boolean collapse) {
+		public ColumnCollapseEvent(Component source, Object propertyId) {
 			super(source);
 			this.propertyId = propertyId;
-			this.collapse = collapse;
 		}
 
+		/**
+		 * Gets the id of the column whose collapse state changed
+		 * 
+		 * @return the property id of the column
+		 */
 		public Object getPropertyId() {
 			return propertyId;
 		}
-
-		public boolean isCollapse() {
-			return collapse;
-		}
 	}
 
 	/**
-	 * Interface for listening to column reorder events.
+	 * Interface for listening to column collapse events.
+	 * 
+	 * @since 7.6
 	 */
-	public interface ColumnCollapsingListener extends Serializable {
+	public interface ColumnCollapseListener extends Serializable {
 
 		/**
-		 * This method is triggered when the column has been reordered
+		 * This method is triggered when the collapse state for a column has changed
 		 * 
 		 * @param event
 		 */
-		public void columnCollapse(ColumnCollapsingEvent event);
+		public void columnCollapseStateChange(ColumnCollapseEvent event);
 	}
 
 	/**
-	 * Adds a column reorder listener to the Table. A column reorder listener is called when a user reorders columns.
+	 * Adds a column collapse listener to the Table. A column collapse listener is called when the collapsed state of a
+	 * column changes.
+	 * 
+	 * @since 7.6
 	 * 
 	 * @param listener
-	 *          The listener to attach to the Table
+	 *          The listener to attach
 	 */
-	public void addColumnCollapsingListener(ColumnCollapsingListener listener) {
-		addListener(PMTableConstants.COLUMN_COLLAPSING_EVENT_ID, ColumnCollapsingEvent.class, listener,
-				ColumnCollapsingEvent.METHOD);
+	public void addColumnCollapseListener(ColumnCollapseListener listener) {
+		addListener(PMTableConstants.COLUMN_COLLAPSE_EVENT_ID, ColumnCollapseEvent.class, listener,
+				ColumnCollapseEvent.METHOD);
 	}
 
 	/**
 	 * Removes a column reorder listener from the Table.
-	 * 
+	 *
+	 * @since 7.6
 	 * @param listener
 	 *          The listener to remove
 	 */
-	public void removeColumnCollapsingListener(ColumnCollapsingListener listener) {
-		removeListener(PMTableConstants.COLUMN_COLLAPSING_EVENT_ID, ColumnCollapsingEvent.class, listener);
+	public void removeColumnCollapseListener(ColumnCollapseListener listener) {
+		removeListener(PMTableConstants.COLUMN_COLLAPSE_EVENT_ID, ColumnCollapseEvent.class, listener);
 	}
 
 	/**
@@ -4444,10 +4461,112 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		return iterator();
 	}
 
+	/**
+	 * ContextClickEvent for the Table Component.
+	 *
+	 * @since 7.6
+	 */
+	public static class PMTableContextClickEvent extends ContextClickEvent {
+
+		private final Object itemId;
+		private final Object propertyId;
+		private final Section section;
+
+		public PMTableContextClickEvent(PMTable source, MouseEventDetails mouseEventDetails, Object itemId,
+				Object propertyId, Section section) {
+			super(source, mouseEventDetails);
+
+			this.itemId = itemId;
+			this.propertyId = propertyId;
+			this.section = section;
+		}
+
+		/**
+		 * Returns the item id of context clicked row.
+		 * 
+		 * @return item id of clicked row; <code>null</code> if header, footer or empty area of Table
+		 */
+		public Object getItemId() {
+			return itemId;
+		}
+
+		/**
+		 * Returns the property id of context clicked column.
+		 * 
+		 * @return property id; or <code>null</code> if we've clicked on the empty area of the Table
+		 */
+		public Object getPropertyId() {
+			return propertyId;
+		}
+
+		/**
+		 * Returns the clicked section of Table.
+		 * 
+		 * @return section of Table
+		 */
+		public Section getSection() {
+			return section;
+		}
+
+		@Override
+		public PMTable getComponent() {
+			return (PMTable) super.getComponent();
+		}
+	}
+
+	@Override
+	protected PMTableState getState() {
+		return getState(true);
+	}
+
+	@Override
+	protected PMTableState getState(boolean markAsDirty) {
+		return (PMTableState) super.getState(markAsDirty);
+	}
+
 	private final Logger getLogger() {
 		if (logger == null) {
 			logger = Logger.getLogger(PMTable.class.getName());
 		}
 		return logger;
 	}
+
+	@Override
+	public void setChildMeasurementHint(ChildMeasurementHint hint) {
+		if (hint == null) {
+			childMeasurementHint = ChildMeasurementHint.MEASURE_ALWAYS;
+		} else {
+			childMeasurementHint = hint;
+		}
+	}
+
+	@Override
+	public ChildMeasurementHint getChildMeasurementHint() {
+		return childMeasurementHint;
+	}
+
+	/**
+	 * Sets whether only collapsible columns should be shown to the user in the column collapse menu. The default is
+	 * {@link CollapseMenuContent#ALL_COLUMNS}.
+	 * 
+	 * 
+	 * @since 7.6
+	 * @param content
+	 *          the desired collapsible menu content setting
+	 */
+	public void setCollapseMenuContent(PMTableCollapseMenuContent content) {
+		getState().collapseMenuContent = content;
+	}
+
+	/**
+	 * Checks whether only collapsible columns are shown to the user in the column collapse menu. The default is
+	 * {@link CollapseMenuContent#ALL_COLUMNS} .
+	 * 
+	 * @since 7.6
+	 * @return the current collapsible menu content setting
+	 */
+	public PMTableCollapseMenuContent getCollapseMenuContent() {
+		return getState(false).collapseMenuContent;
+	}
+
 }

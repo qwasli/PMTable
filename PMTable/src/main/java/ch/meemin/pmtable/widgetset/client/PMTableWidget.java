@@ -69,6 +69,7 @@ import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ConnectorMap;
 import com.vaadin.client.DeferredWorker;
 import com.vaadin.client.Focusable;
+import com.vaadin.client.HasChildMeasurementHintConnector.ChildMeasurementHint;
 import com.vaadin.client.MouseEventDetailsBuilder;
 import com.vaadin.client.TooltipInfo;
 import com.vaadin.client.UIDL;
@@ -622,6 +623,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 	private int multiselectmode;
 
+	/**
+	 * Hint for how to handle measurement of child components
+	 */
+	private ChildMeasurementHint childMeasurementHint = ChildMeasurementHint.MEASURE_ALWAYS;
+
 	/** For internal use only. May be removed or replaced in the future. */
 	public int tabIndex;
 
@@ -1102,11 +1108,6 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 		scrollBody.renderInitialRows(rowData, uidl.getIntAttribute("rows"));
 		scrollBodyPanel.add(scrollBody);
-
-		// New body starts scrolled to the left, make sure the header and footer
-		// are also scrolled to the left
-		tHead.setHorizontalScrollPosition(0);
-		tFoot.setHorizontalScrollPosition(0);
 
 		initialContentReceived = true;
 		sizeNeedsInit = true;
@@ -3225,22 +3226,28 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					cols[i++] = it.next();
 				}
 			}
-			final Action[] actions = new Action[cols.length];
+			List<Action> actions = new ArrayList<Action>(cols.length);
 
 			for (int i = 0; i < cols.length; i++) {
 				final String cid = (String) cols[i];
+				boolean noncollapsible = noncollapsibleColumns.contains(cid);
+
+				if (noncollapsible && collapsibleMenuContent == PMTableCollapseMenuContent.COLLAPSIBLE_COLUMNS) {
+					continue;
+				}
+
 				final HeaderCell c = getHeaderCell(cid);
 				final VisibleColumnAction a = new VisibleColumnAction(c.getColKey());
 				a.setCaption(c.getCaption());
 				if (!c.isEnabled()) {
 					a.setCollapsed(true);
 				}
-				if (noncollapsibleColumns.contains(cid)) {
+				if (noncollapsible) {
 					a.setNoncollapsible(true);
 				}
-				actions[i] = a;
+				actions.add(a);
 			}
-			return actions;
+			return actions.toArray(new Action[actions.size()]);
 		}
 
 		@Override
@@ -5788,6 +5795,9 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 	/** For internal use only. May be removed or replaced in the future. */
 	public boolean multiselectPending;
 
+	/** For internal use only. May be removed or replaced in the future. */
+	public PMTableCollapseMenuContent collapsibleMenuContent;
+
 	/**
 	 * @return border top + border bottom of the scrollable area of table
 	 */
@@ -6620,5 +6630,13 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 
 	private static Logger getLogger() {
 		return Logger.getLogger(VScrollTable.class.getName());
+	}
+
+	public ChildMeasurementHint getChildMeasurementHint() {
+		return childMeasurementHint;
+	}
+
+	public void setChildMeasurementHint(ChildMeasurementHint hint) {
+		childMeasurementHint = hint;
 	}
 }
