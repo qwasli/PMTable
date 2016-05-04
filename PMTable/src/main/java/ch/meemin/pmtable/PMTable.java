@@ -297,6 +297,7 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	 * Holds value of property selectable.
 	 */
 	private boolean selectable = false;
+	private boolean justSetedUnselectable = false;
 
 	/**
 	 * Holds value of property columnHeaderMode.
@@ -1123,6 +1124,8 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	public void setSelectable(boolean selectable) {
 		if (this.selectable != selectable) {
 			this.selectable = selectable;
+			if (!selectable)
+				this.justSetedUnselectable = true;
 			markAsDirty();
 		}
 	}
@@ -2379,8 +2382,9 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 
 		// selection support
 		// The select variable is only enabled if selectable
-		if (isSelectable()) {
+		if (isSelectable() || justSetedUnselectable) {
 			target.addVariable(this, "selected", findSelectedKeys());
+			justSetedUnselectable = false;
 		}
 	}
 

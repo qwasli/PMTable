@@ -4333,6 +4333,10 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 					addStyleName(primaryStyleName + "-row-" + rowStyle);
 				}
 
+				if (selected) {
+					addStyleName("v-selected");
+				}
+
 				for (int i = 0; i < rowElement.getChildCount(); i++) {
 					TableCellElement cell = (TableCellElement) rowElement.getChild(i);
 					updateCellStyleNames(cell, primaryStyleName);
