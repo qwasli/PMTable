@@ -831,16 +831,29 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		markAsDirty();
 	}
 
-	public void setScrollToShowElement(Object id) {
+	/**
+	 * Asks the table to scroll to a certain row. It takes the offset factor to calculate the distance between the top of
+	 * the table and the element to scroll to. See {@link #setScrollToElementOffsetFactor(float)}
+	 * 
+	 * @param id
+	 *          ID of the Item to scroll to
+	 */
+
+	public void scrollToElement(Object id) {
 		this.scrollToShowElement = id;
-		if (this.scrollToShowElement != id)
-			getLogger().warning("WTF?");
 		markAsDirty();
 	}
 
+	/**
+	 * Sets a fator which is used to calculate the distance between the top of the table and the row to scroll to
+	 * ({@link #scrollToElement(Object)}) The default factor is 0.25 and is multiplied with the height of the table. To
+	 * scroll exacty to the element set the factor to 0.
+	 * 
+	 * @param factor
+	 *          new scrollToElementOffsetFactor
+	 */
 	public void setScrollToElementOffsetFactor(float factor) {
 		getState().scrollToElementOffsetFactor = factor;
-		// markAsDirty();
 	}
 
 	protected int indexOfId(Object itemId) {

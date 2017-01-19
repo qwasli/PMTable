@@ -125,7 +125,7 @@ public class DemoUI extends UI implements Handler, DropHandler, ColumnCollapseLi
 			public void buttonClick(ClickEvent event) {
 				ArrayList<?> ids = new ArrayList(pmTreeTable.getItemIds());
 				Object id = ids.get(rand.nextInt(ids.size()));
-				pmTreeTable.setScrollToShowElement(id);
+				pmTreeTable.scrollToElement(id);
 				Notification.show("Scrolling to: " + id);
 			}
 		});
