@@ -1222,6 +1222,16 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		}
 	};
 
+	private String scrollToKey;
+	private ScheduledCommand lazyElementScroller = new ScheduledCommand() {
+		@Override
+		public void execute() {
+			scrollTop = calcScrollTopShowRow(scrollToKey);
+			client.updateVariable(paintableId, "scrollTop", scrollTop, false);
+			scrollBodyPanel.setScrollPosition(scrollTop);
+		}
+	};
+
 	public void updateScrollTop(UIDL uidl) {
 		boolean hasScrollTop = uidl.hasAttribute("scrollTop");
 		scrollTop = hasScrollTop ? uidl.getIntAttribute("scrollTop") : 0;
@@ -1230,6 +1240,11 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 			 * Schedule the scrolling to be executed last so no updates to the rows affect scrolling measurements.
 			 */
 			Scheduler.get().scheduleFinally(lazyScroller);
+		}
+		boolean hasScrollKey = uidl.hasAttribute("scrollToKey");
+		if (hasScrollKey) {
+			scrollToKey = uidl.getStringAttribute("scrollToKey");
+			Scheduler.get().scheduleFinally(lazyElementScroller);
 		}
 	}
 
@@ -6346,6 +6361,14 @@ public class PMTableWidget extends FlowPanel implements HasWidgets, ScrollHandle
 		} // else if too high, NOP (all know browsers accept illegally big
 			// values here)
 		scrollBodyPanel.setScrollPosition(newPixels);
+	}
+
+	private int calcScrollTopShowRow(String key) {
+		PMTableWidgetRow row = getRenderedRowByKey(key);
+		Element elem = row.getElement();
+		int st = elem.getOffsetTop() - Math.round((containerHeight * ((PMTableState) ConnectorMap.get(client).getConnector(
+				PMTableWidget.this).getState()).scrollToElementOffsetFactor));
+		return st;
 	}
 
 	/*

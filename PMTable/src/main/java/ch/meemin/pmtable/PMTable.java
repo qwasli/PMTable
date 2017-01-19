@@ -293,6 +293,8 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	 */
 	private int scrollTop = 0;
 
+	private Object scrollToShowElement = null;
+
 	/**
 	 * Holds value of property selectable.
 	 */
@@ -827,6 +829,18 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 	public void setScrollTop(int scrollTop) {
 		this.scrollTop = scrollTop;
 		markAsDirty();
+	}
+
+	public void setScrollToShowElement(Object id) {
+		this.scrollToShowElement = id;
+		if (this.scrollToShowElement != id)
+			getLogger().warning("WTF?");
+		markAsDirty();
+	}
+
+	public void setScrollToElementOffsetFactor(float factor) {
+		getState().scrollToElementOffsetFactor = factor;
+		// markAsDirty();
 	}
 
 	protected int indexOfId(Object itemId) {
@@ -2201,6 +2215,11 @@ public class PMTable extends AbstractSelect implements Action.Container, Contain
 		target.addAttribute("rows", size);
 
 		target.addAttribute("scrollTop", scrollTop);
+		if (scrollToShowElement != null) {
+			target.addAttribute("scrollToKey", itemIdMapper.key(scrollToShowElement));
+			scrollToShowElement = null;
+		}
+
 		target.addAttribute("totalrows", size);
 
 		if (areColumnHeadersEnabled()) {

@@ -8,4 +8,5 @@ public class PMTableState extends AbstractSelectState {
 	}
 
 	public PMTableCollapseMenuContent collapseMenuContent = PMTableConstants.DEFAULT_COLLAPSE_MENU_CONTENT;
+	public float scrollToElementOffsetFactor = 1 / 4;
 }
